@@ -1,0 +1,25 @@
+{
+  "code": "00",
+  "description": " Data recovered OK",
+  "datetime": "2026-07-06T02:06:28.688259",
+  "data": [
+    {
+      "title": "Canal de Noticias de la Empresa Municipal de Transportes de Madrid",
+      "link": "http://feeds.feedburner.com/emtmadrid",
+      "description": "Informaciones de interés para el cliente de EMT de Madrid",
+      "language": null,
+      "image": {
+        "title": "Canales de información de EMT",
+        "url": "http://feeds.emtmadrid.es:8082/images/logoemthorizontal.gif",
+        "link": "http://www.emtmadrid.es/",
+        "description": null
+      },
+      "copyright": "Empresa Municipal de Transportes de Madrid",
+      "webMaster": "opendata@emtmadrid.es",
+      "lastBuildDate": "Sun, 05 Jul 2026 13:19:18 GMT",
+      "ttl": "120",
+      "generator": null,
+      "item": []
+    }
+  ]
+}

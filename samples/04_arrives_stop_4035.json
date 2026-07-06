@@ -1,0 +1,207 @@
+{
+  "code": "01",
+  "description": "No estimations found (lapsed: 111 millsecs)",
+  "datetime": "2026-07-06T02:06:27.280051",
+  "data": [
+    {
+      "Arrive": [],
+      "StopInfo": [
+        {
+          "lines": [
+            {
+              "label": "M1",
+              "line": "601",
+              "nameA": "SOL SEVILLA",
+              "nameB": "EMBAJADORES",
+              "metersFromHeader": 273,
+              "to": "A",
+              "color": "0072ce"
+            }
+          ],
+          "stopId": "4035",
+          "stopName": "Mercado San Fernando",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.703890727899125,
+              40.40755747243754
+            ]
+          },
+          "Direction": "Embajadores frente al Nº 60                            "
+        }
+      ],
+      "ExtraInfo": [],
+      "Incident": {
+        "ListaIncident": {
+          "data": [
+            {
+              "title": "Manifestación en zona Cibeles. Afectadas 26 líneas de EMT.",
+              "guid": "6F0F84C9-3E22-49D7-8024-08D2E2F665DB",
+              "description": "El 1 de julio de 8:30 a 10:00 horas aproximadamente, las líneas 001, 002, 1, 2, 3, 5, 9, 10, 14, 15, 20, 27, 34, 37, 45, 46, 51, 52, 53, 74, 146, 150, C03, E1, M1 y Exprés Aeropuerto, tendrán retenciones y modificaciones en sus itinerarios en paseo del Prado, plaza de Cibeles y Alcalá por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Mon, 29 Jun 2026 12:42:47 GMT",
+              "rssFrom": "01/07/2026 8:30:00",
+              "rssTo": "01/07/2026 10:00:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260701-M-Paseo-Prado-Alcala.pdf",
+                "@type": "application/pdf",
+                "@length": "73199"
+              }
+            },
+            {
+              "title": "Supresión de Parada: Colegiata. Afectadas 3 líneas de EMT.",
+              "guid": "F593C762-7A83-4BA5-8984-F5B69AAC1557",
+              "description": "Del 17 de junio a fin de obras, las líneas 002, M1 y M3, suprimen provisionalmente la parada 4058, ubicada en Colegiata frente número 14. Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Mon, 15 Jun 2026 15:11:41 GMT",
+              "rssFrom": "17/06/2026 6:00:00",
+              "rssTo": "14/07/2026 19:00:00",
+              "cause": "08 - Obras",
+              "effect": "08 - Parada suprimida",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260617-SP-4058-Colegiata.pdf",
+                "@type": "application/pdf",
+                "@length": "96933"
+              }
+            },
+            {
+              "title": "Manifestación en carrera de San Jerónimo. Afectadas 9 líneas de EMT.",
+              "guid": "C5CBA8BD-AAD7-4731-A754-155E45370BCB",
+              "description": "El 17 de junio de 11:00 a 13:30 horas aproximadamente, las líneas 002, 5, 15, 20, 51, 53, 150, M1 y M3, tendrán retenciones y modificaciones en sus itinerarios en carrera de San Jerónimo por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Mon, 15 Jun 2026 11:02:43 GMT",
+              "rssFrom": "17/06/2026 11:00:00",
+              "rssTo": "17/06/2026 13:30:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260617-M-Carrera-San-Jeronimo.pdf",
+                "@type": "application/pdf",
+                "@length": "72320"
+              }
+            },
+            {
+              "title": "Manifestación en calle Alcalá y paseo del Prado. Afectadas 26 líneas de EMT.",
+              "guid": "E9D3529D-19D6-4C0B-BBDF-8F4A9A399E11",
+              "description": "El 17 de junio de 12:00 a 15:30 horas aproximadamente, las líneas 001, 002, 1, 2, 3, 5, 9, 10, 14, 15, 20, 27, 34, 37, 45, 46, 51, 52, 53, 74, 146, 150, 203, C03, E1 y M1, tendrán retenciones y modificaciones en sus itinerarios en calle de Alcalá, plaza de Cibeles, paseo del Prado y plaza de Cánovas del Castillo por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Sun, 14 Jun 2026 08:01:15 GMT",
+              "rssFrom": "17/06/2026 12:00:00",
+              "rssTo": "17/06/2026 15:30:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260617-M-Alcala-Prado.pdf",
+                "@type": "application/pdf",
+                "@length": "72881"
+              }
+            },
+            {
+              "title": "Concentración en carrera de San Jerónimo. Afectadas 9 líneas de EMT.",
+              "guid": "41A80C7A-0126-4A0E-9AD1-4E18A6F1549E",
+              "description": "El 15 de junio de 18:00 a 20:30 horas aproximadamente, las líneas 002, 5, 15, 20, 51, 53, 150, M1 y M3, tendrán retenciones y modificaciones en sus itinerarios en carrera de San Jerónimo por concentración, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Fri, 12 Jun 2026 08:02:55 GMT",
+              "rssFrom": "15/06/2026 18:00:00",
+              "rssTo": "15/06/2026 20:30:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260615-C-Carrera-San-Jeronimo.pdf",
+                "@type": "application/pdf",
+                "@length": "72529"
+              }
+            },
+            {
+              "title": "Manifestación en zona Cibeles. Afectadas 26 líneas de EMT.",
+              "guid": "AF3A59EC-3946-4CC4-9966-56F1CCF119D1",
+              "description": "El 14 de junio de 11:30 a 15:00 horas aproximadamente, las líneas 001, 002, 1, 2, 3, 5, 9, 10, 14, 15, 20, 27, 34, 37, 45, 46, 51, 52, 53, 74, 146, 150, 203, C03, E1 y M1, tendrán retenciones y modificaciones en sus itinerarios en paseo del Prado, plaza de Cibeles, calle de Alcalá y plaza de la Puerta del Sol por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Thu, 11 Jun 2026 08:02:02 GMT",
+              "rssFrom": "14/06/2026 11:30:00",
+              "rssTo": "14/06/2026 15:00:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260614-M-Prado-Alcala.pdf",
+                "@type": "application/pdf",
+                "@length": "72895"
+              }
+            },
+            {
+              "title": "Manifestación en distrito de Retiro y Centro. Afectadas 41 líneas de EMT.",
+              "guid": "BEC62D88-93EC-456A-87B8-ABADE84859CC",
+              "description": "El 13 de junio de 12:30 a 15:00 horas aproximadamente, las líneas 1, 2, 3, 5, 7, 9, 14, 15, 19, 20, 21, 25, 27, 28, 37, 39, 40, 44, 45, 46, 51, 52, 53, 74, 75, 133, 138, 146, 147, 148, 149, 150, 158, C1, 001 -002, C03, E1, M1, M3 y Exprés Aeropuerto, tendrán retenciones y modificaciones en sus itinerarios en plaza de Cibeles, Alcalá, plaza de la Independencia, Alfonso XII, paseo del Prado, Gran Vía, plaza de España, Princesa, Alberto Aguilera, Carranza, Sagasta, Génova, plaza de Colón, paseo de Recoletos, Mayor y Bailen por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Wed, 10 Jun 2026 08:01:26 GMT",
+              "rssFrom": "13/06/2026 12:30:00",
+              "rssTo": "13/06/2026 15:00:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260613-M-Marcha-Bicicleta.pdf",
+                "@type": "application/pdf",
+                "@length": "73981"
+              }
+            },
+            {
+              "title": "Manifestación en zona Centro. Afectadas 25 líneas de EMT.",
+              "guid": "01A1DE44-ECCD-4C71-8F07-AF5EF8094C0C",
+              "description": "El 13 de junio de 18:00 a 22:00 horas aproximadamente, las líneas 001, 002, 6, 10, 14, 19, 26, 27, 32, 34, 37, 45, 50, 59, 65, 85, 86, 102, C03, C1, C2, E1, M1, M3 y Exprés Aeropuerto, tendrán retenciones y modificaciones en sus itinerarios en Mayor, Esparteros, plaza de la Provincia, calle de Atocha y plaza del Emperador Carlos V por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Wed, 10 Jun 2026 07:01:23 GMT",
+              "rssFrom": "13/06/2026 18:00:00",
+              "rssTo": "13/06/2026 22:00:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260613-M-Mayor-Plaza-Emperador-Carlos-V.pdf",
+                "@type": "application/pdf",
+                "@length": "73135"
+              }
+            },
+            {
+              "title": "Manifestación en zona Centro. Afectadas 27 líneas de EMT.",
+              "guid": "2FF9C3B2-987B-41D6-A8A4-E5157A1CC232",
+              "description": "El 13 de junio de 17:30 a 21:00 horas aproximadamente, las líneas 001, 002, 1, 2, 3, 5, 9, 10, 14, 15, 19, 20, 27, 34, 37, 45, 46, 51, 52, 53, 74, 146, 150, C03, E1, M1 y Exprés Aeropuerto, tendrán retenciones y modificaciones en sus itinerarios en Serrano, plaza de la Independencia, Alcalá y plaza de Cibeles por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Wed, 10 Jun 2026 07:01:23 GMT",
+              "rssFrom": "13/06/2026 17:30:00",
+              "rssTo": "13/06/2026 21:00:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260613-M-Serrano-Sol.pdf",
+                "@type": "application/pdf",
+                "@length": "73039"
+              }
+            },
+            {
+              "title": "Concentración en Carrera de San Jerónimo. Afectadas 8 líneas de EMT.",
+              "guid": "C6F0E665-0270-4D1B-8BEF-5E72197E9050",
+              "description": "El 11 de junio de 12:00 a 14:30 horas aproximadamente, las líneas 002, 5, 15, 20, 51, 53, 150 y M1, tendrán retenciones y modificaciones en sus itinerarios en Carrera de San Jerónimo por concentración, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Mon, 08 Jun 2026 05:39:47 GMT",
+              "rssFrom": "11/06/2026 12:00:00",
+              "rssTo": "11/06/2026 14:30:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260611-C-Carrera-San-Jeronimo.pdf",
+                "@type": "application/pdf",
+                "@length": "72320"
+              }
+            },
+            {
+              "title": "Manifestación en Alcalá. Afectadas 17 líneas de EMT.",
+              "guid": "905E63D0-E6BE-46AB-892D-8E501CD41E5C",
+              "description": "El 10 de junio, de 10:30 a 12:30 horas aproximadamente, las líneas 001, 002, 1, 2, 3, 5, 9, 15, 20, 46, 51, 52, 53, 74, 146, 150 y M1, tendrán retenciones y modificaciones en sus itinerarios en Alcalá por manifestación, según su desarrollo y de acuerdo con las restricciones de tráfico que realice Policía Municipal.  Ver más detalle en documento adjunto.<p><img src='http://feeds.emtmadrid.es:8082/images/00-Logo-RSS_Corporativo.png'/></p>",
+              "pubDate": "Sun, 07 Jun 2026 08:02:29 GMT",
+              "rssFrom": "10/06/2026 10:30:00",
+              "rssTo": "10/06/2026 12:30:00",
+              "cause": "04 - Manifestación",
+              "effect": "05 - Desvío programado",
+              "moreInfo": {
+                "@url": "http://feeds.emtmadrid.es:8082/docs/20260610-M-Alcala.pdf",
+                "@type": "application/pdf",
+                "@length": "72384"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "APIVersion": {
+    "apiver": "00110",
+    "description": "Deploy 20/02/2024"
+  },
+  "SourceCli": "86.127.230.229",
+  "SourceIP": "86.127.230.229",
+  "code": "00",
+  "developerPortal": "https://mobilitylabs.emtmadrid.es",
+  "instant": "2026-07-06T02:06:21.727252",
+  "message": "Hello, here openapi.emtmadrid.es, I am running Ok and I feel good",
+  "morehelp": "https://gitlab.com/mobilitylabsmadrid",
+  "poweredBy": "Empresa Municipal de Transportes de Madrid, S.A.",
+  "versions": [
+    "v1",
+    "build 06",
+    "v2",
+    "build 10"
+  ]
+}

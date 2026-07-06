@@ -1,0 +1,38 @@
+{
+  "code": "00",
+  "description": "Data recovered OK",
+  "datetime": "2026-07-06T02:06:28.106569",
+  "data": [
+    {
+      "stops": [
+        {
+          "stop": "4045",
+          "name": "Lavapiés",
+          "postalAddress": "Pza. Lavapiés, 8",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.70114929592635,
+              40.4086585025642
+            ]
+          },
+          "pmv": null,
+          "dataLine": [
+            {
+              "line": "601",
+              "label": "M1",
+              "direction": "B",
+              "maxFreq": "15",
+              "minFreq": "9",
+              "headerA": "SOL/SEVILLA",
+              "headerB": "EMBAJADORES",
+              "startTime": "08:00",
+              "stopTime": "20:35",
+              "dayType": "LA"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

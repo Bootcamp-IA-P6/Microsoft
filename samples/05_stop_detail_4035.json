@@ -1,0 +1,38 @@
+{
+  "code": "00",
+  "description": "Data recovered OK",
+  "datetime": "2026-07-06T02:06:27.564342",
+  "data": [
+    {
+      "stops": [
+        {
+          "stop": "4035",
+          "name": "Mercado San Fernando",
+          "postalAddress": "Embajadores frente al Nº 60",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.70389670639245,
+              40.407650839977
+            ]
+          },
+          "pmv": null,
+          "dataLine": [
+            {
+              "line": "601",
+              "label": "M1",
+              "direction": "A",
+              "maxFreq": "15",
+              "minFreq": "9",
+              "headerA": "SOL/SEVILLA",
+              "headerB": "EMBAJADORES",
+              "startTime": "08:20",
+              "stopTime": "21:00",
+              "dayType": "LA"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

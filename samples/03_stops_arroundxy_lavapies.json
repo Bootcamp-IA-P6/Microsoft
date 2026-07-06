@@ -1,0 +1,52 @@
+{
+  "code": "00",
+  "description": "Data recovered OK",
+  "data": [
+    {
+      "stopId": 4035,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.703890727899125,
+          40.40755747243754
+        ]
+      },
+      "stopName": "Mercado San Fernando",
+      "address": "Embajadores frente al Nº 60                            ",
+      "metersToPoint": 157,
+      "lines": [
+        {
+          "line": "601",
+          "label": "M1",
+          "nameA": "SOL SEVILLA",
+          "nameB": "EMBAJADORES",
+          "metersFromHeader": 273,
+          "to": "A"
+        }
+      ]
+    },
+    {
+      "stopId": 4045,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.701143425270102,
+          40.40856514552166
+        ]
+      },
+      "stopName": "Lavapiés",
+      "address": "Pza. Lavapiés, 8                                       ",
+      "metersToPoint": 159,
+      "lines": [
+        {
+          "line": "601",
+          "label": "M1",
+          "nameA": "SOL SEVILLA",
+          "nameB": "EMBAJADORES",
+          "metersFromHeader": 1685,
+          "to": "B"
+        }
+      ]
+    }
+  ]
+}
