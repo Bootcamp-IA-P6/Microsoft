@@ -89,7 +89,7 @@ def main() -> int:
     )
     print(json.dumps(redact(login), indent=2, ensure_ascii=False))
 
-    if login.get("code") != "00":
+    if login.get("code") not in ("00", "01"):
         print("Login failed", file=sys.stderr)
         return 1
 

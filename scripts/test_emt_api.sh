@@ -72,7 +72,7 @@ LOGIN_JSON="$(curl -sS -X GET "https://openapi.emtmadrid.es/v1/mobilitylabs/user
 echo "$LOGIN_JSON" | redact_json
 
 CODE="$(echo "$LOGIN_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("code",""))')"
-if [[ "$CODE" != "00" ]]; then
+if [[ "$CODE" != "00" && "$CODE" != "01" ]]; then
   echo
   echo "Login failed (code=${CODE}). Check:" >&2
   echo "  - x-ClientId looks like a UUID (~36 chars), copied from Mobility Labs app panel" >&2

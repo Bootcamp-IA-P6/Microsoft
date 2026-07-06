@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Fetch EMT API sample JSON responses into samples/ for the team.
 
-Uses Basic auth (EMT_EMAIL + EMT_PASSWORD in .env). Login responses are saved
-with accessToken redacted. Re-run anytime to refresh snapshots:
+Uses Protected auth (EMT_CLIENT_ID + EMT_MADRID_PASS_KEY). Falls back to Basic
+(email + password) if app credentials are missing. Login responses redact accessToken.
 
     python3 scripts/fetch_emt_samples.py
 """
@@ -77,27 +77,49 @@ def save(name: str, payload: dict) -> Path:
     return path
 
 
-def login_basic(email: str, password: str) -> tuple[str, dict]:
+def login_ok(code: str | None) -> bool:
+    return code in ("00", "01")
+
+
+def login_protected(client_id: str, pass_key: str) -> tuple[str, dict, str]:
+    raw = api_call(
+        "GET",
+        "/v1/mobilitylabs/user/login/",
+        headers={"X-ClientId": client_id, "passKey": pass_key},
+    )
+    code = raw.get("code")
+    if not login_ok(code):
+        raise RuntimeError(f"Protected login failed: code={code} desc={raw.get('description')}")
+    return raw["data"][0]["accessToken"], raw, "protected"
+
+
+def login_basic(email: str, password: str) -> tuple[str, dict, str]:
     raw = api_call(
         "GET",
         "/v1/mobilitylabs/user/login/",
         headers={"email": email, "password": password},
     )
     code = raw.get("code")
-    if code not in ("00", "01"):
+    if not login_ok(code):
         raise RuntimeError(f"Basic login failed: code={code} desc={raw.get('description')}")
-    token = raw["data"][0]["accessToken"]
-    return token, raw
+    return raw["data"][0]["accessToken"], raw, "basic"
 
 
 def main() -> int:
     env = load_env()
+    client_id = env.get("EMT_MADRID_CLIENT_ID") or env.get("EMT_CLIENT_ID", "")
+    pass_key = env.get("EMT_MADRID_PASS_KEY") or env.get("EMT_PASS_KEY", "")
     email = env.get("EMT_EMAIL", "")
     password = env.get("EMT_PASSWORD", "")
-    if not email or not password:
+
+    if client_id and pass_key:
+        auth_mode = "protected"
+    elif email and password:
+        auth_mode = "basic"
+    else:
         print(
-            "Add EMT_EMAIL and EMT_PASSWORD to .env (local only, never commit).\n"
-            "Basic auth is required while passKey login returns code 84.",
+            "Set EMT_CLIENT_ID + EMT_MADRID_PASS_KEY in .env (preferred),\n"
+            "or EMT_EMAIL + EMT_PASSWORD as fallback.",
             file=sys.stderr,
         )
         return 1
@@ -108,8 +130,12 @@ def main() -> int:
     hello = api_call("GET", "/v1/hello/")
     saved.append(str(save("01_hello.json", hello)))
 
-    token, login_raw = login_basic(email, password)
-    saved.append(str(save("02_login_basic.json", redact_tokens(login_raw))))
+    if auth_mode == "protected":
+        token, login_raw, _ = login_protected(client_id, pass_key)
+        saved.append(str(save("02_login_protected.json", redact_tokens(login_raw))))
+    else:
+        token, login_raw, _ = login_basic(email, password)
+        saved.append(str(save("02_login_basic.json", redact_tokens(login_raw))))
 
     stops = api_call(
         "GET",

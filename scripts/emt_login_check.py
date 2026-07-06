@@ -85,7 +85,12 @@ def main() -> int:
 
     print(f"clientId len={len(cid)}  passKey len={len(pk)}")
 
-    report("Protected (X-ClientId + passKey)", curl_json({"X-ClientId": cid, "passKey": pk}))
+    protected = curl_json({"X-ClientId": cid, "passKey": pk})
+    report("Protected (X-ClientId + passKey)", protected)
+    if protected and protected.get("code") in ("00", "01") and protected.get("data"):
+        c = api_counter(protected)
+        if c:
+            print(f"\n  → Protected OK (dailyUse={c.get('dailyUse')})")
 
     if not args.advanced:
         print("\nTip: run with --advanced after adding EMT_EMAIL + EMT_PASSWORD to .env")
