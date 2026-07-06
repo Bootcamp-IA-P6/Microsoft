@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
-# Quick smoke test for EMT Madrid OpenAPI using .env credentials.
+# ------------------------------------------------------------
+# - Quick smoke test for EMT Madrid OpenAPI using .env credentials.
+# - how to use: ./scripts/test_emt_api.sh
+# - x-ClientId looks like a UUID (~36 chars), copied from Mobility Labs app panel
+# - passKey copied alone, no labels/extra text/spaces
+# - app created at https://mobilitylabs.emtmadrid.es (Mis Aplicaciones)
+# - docs: https://apidocs.emtmadrid.es/#api-Block_1_User_identity-login
+# ------------------------------------------------------------
+
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

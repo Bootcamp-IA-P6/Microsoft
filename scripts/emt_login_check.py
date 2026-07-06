@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """EMT login diagnostics — reads .env safely, never prints secrets or tokens.
 
-Modes:
+Modes (how to use):
   python3 scripts/emt_login_check.py           # Protected only (ClientId + passKey)
   python3 scripts/emt_login_check.py --advanced # Basic + Protected + Advanced (needs email/pw in .env)
 
