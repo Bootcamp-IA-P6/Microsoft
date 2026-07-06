@@ -2,6 +2,8 @@
 
 Reference for JSON files under `samples/`. Captured from the [EMT Swagger API](https://datos.emtmadrid.es/m360-swagger/docs) (`https://openapi.emtmadrid.es`).
 
+> **Issue #2 deliverable (AC):** see [emt-api-research.md](./emt-api-research.md) for endpoints, auth, rate limits, and live-data confirmation.
+
 ## Auth note
 
 Samples use **Protected login** (`EMT_CLIENT_ID` + `EMT_MADRID_PASS_KEY` in `.env`). App credentials are active (`code` `00`/`01`, daily quota up to ~250k).
