@@ -174,3 +174,8 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
+# custom
+docs/Convenciones_del_equipo_Notion.pdf
+docs/factoriaF52026_abstract.pdf
+docs/roadmap.md
