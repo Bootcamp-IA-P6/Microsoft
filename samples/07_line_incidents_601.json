@@ -1,7 +1,7 @@
 {
   "code": "00",
   "description": " Data recovered OK",
-  "datetime": "2026-07-06T02:06:28.688259",
+  "datetime": "2026-07-06T10:19:33.432761",
   "data": [
     {
       "title": "Canal de Noticias de la Empresa Municipal de Transportes de Madrid",
@@ -16,7 +16,7 @@
       },
       "copyright": "Empresa Municipal de Transportes de Madrid",
       "webMaster": "opendata@emtmadrid.es",
-      "lastBuildDate": "Sun, 05 Jul 2026 13:19:18 GMT",
+      "lastBuildDate": "Mon, 06 Jul 2026 08:00:00 GMT",
       "ttl": "120",
       "generator": null,
       "item": []

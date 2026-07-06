@@ -1,0 +1,35 @@
+{
+  "code": "01",
+  "description": "Token extend  into control-cache Data recovered OK",
+  "datetime": "2026-07-06T10:19:31.776825",
+  "data": [
+    {
+      "nameApp": "microsoft-factoriaf5-2026",
+      "levelApp": 0,
+      "updatedAt": "2026-07-03T10:03:04.733000",
+      "userName": "liveforshinhwa",
+      "lastUpdate": {
+        "$date": 1783325883507
+      },
+      "idUser": "cfe2c9b5-e4d4-4f1d-9cc0-cd1fe6acb890",
+      "priv": "U",
+      "tokenSecExpiration": 86400,
+      "email": "liveforshinhwa@gmail.com",
+      "tokenDteExpiration": {
+        "$date": 1783412283507
+      },
+      "flagAdvise": false,
+      "deviceId": null,
+      "modeSession": "app",
+      "deviceModel": "no_model",
+      "accessToken": "***REDACTED***",
+      "apiCounter": {
+        "current": 20,
+        "dailyUse": 250000,
+        "owner": 0,
+        "licenceUse": "Please mention EMT Madrid MobilityLabs as data source. Thank you and enjoy!"
+      },
+      "username": "liveforshinhwa"
+    }
+  ]
+}

@@ -1,10 +1,47 @@
 {
-  "code": "01",
-  "description": "No estimations found (lapsed: 111 millsecs)",
-  "datetime": "2026-07-06T02:06:27.280051",
+  "code": "00",
+  "description": " Data recovered OK  (lapsed: 94 millsecs)",
+  "datetime": "2026-07-06T10:19:32.088161",
   "data": [
     {
-      "Arrive": [],
+      "Arrive": [
+        {
+          "line": "M1",
+          "stop": "4035",
+          "isHead": "False",
+          "destination": "SOL SEVILLA",
+          "deviation": 0,
+          "bus": 9012,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.702403263403655,
+              40.40535366928104
+            ]
+          },
+          "estimateArrive": 184,
+          "DistanceBus": 230,
+          "positionTypeBus": "0"
+        },
+        {
+          "line": "M1",
+          "stop": "4035",
+          "isHead": "False",
+          "destination": "SOL SEVILLA",
+          "deviation": 0,
+          "bus": 9016,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.7023092712235837,
+              40.405381267447616
+            ]
+          },
+          "estimateArrive": 904,
+          "DistanceBus": 305,
+          "positionTypeBus": "0"
+        }
+      ],
       "StopInfo": [
         {
           "lines": [

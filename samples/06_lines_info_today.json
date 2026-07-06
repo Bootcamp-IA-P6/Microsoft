@@ -1,6 +1,6 @@
 {
   "code": "00",
-  "description": " Data recovered OK (lapsed: 101 millsecs)",
+  "description": " Data recovered OK (lapsed: 61 millsecs)",
   "data": [
     {
       "line": "361",
@@ -115,7 +115,7 @@
       "group": "110",
       "startDate": "06/07/2026",
       "endDate": "06/07/2026",
-      "longLine1": 8215,
+      "longLine1": 8011,
       "longLine2": 8288,
       "order": 3,
       "color": "0072ce"
@@ -1675,7 +1675,7 @@
       "group": "110",
       "startDate": "06/07/2026",
       "endDate": "06/07/2026",
-      "longLine1": 5994,
+      "longLine1": 5931,
       "longLine2": 6065,
       "order": 3,
       "color": "0072ce"

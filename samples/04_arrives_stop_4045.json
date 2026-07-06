@@ -1,10 +1,47 @@
 {
-  "code": "01",
-  "description": "No estimations found (lapsed: 74 millsecs)",
-  "datetime": "2026-07-06T02:06:27.892493",
+  "code": "00",
+  "description": " Data recovered OK  (lapsed: 108 millsecs)",
+  "datetime": "2026-07-06T10:19:32.655022",
   "data": [
     {
-      "Arrive": [],
+      "Arrive": [
+        {
+          "line": "M1",
+          "stop": "4045",
+          "isHead": "False",
+          "destination": "EMBAJADORES",
+          "deviation": 0,
+          "bus": 9013,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.699500696321455,
+              40.41753341315357
+            ]
+          },
+          "estimateArrive": 980,
+          "DistanceBus": 1700,
+          "positionTypeBus": "0"
+        },
+        {
+          "line": "M1",
+          "stop": "4045",
+          "isHead": "False",
+          "destination": "EMBAJADORES",
+          "deviation": 0,
+          "bus": 9014,
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              -3.707325225979709,
+              40.4128371548451
+            ]
+          },
+          "estimateArrive": 1602,
+          "DistanceBus": 2813,
+          "positionTypeBus": "0"
+        }
+      ],
       "StopInfo": [
         {
           "lines": [
