@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Quick smoke test for EMT Madrid OpenAPI using .env credentials."""
+"""Quick smoke test for EMT Madrid OpenAPI using local `.env` credentials.
+
+Run:
+    python3 scripts/test_emt_api.py
+"""
 
 from __future__ import annotations
 
