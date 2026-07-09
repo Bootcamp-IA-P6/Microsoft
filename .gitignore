@@ -27,3 +27,12 @@ __pycache__/
 
 # Logs locales
 *.log
+
+# Generated API sample responses (run: python3 scripts/fetch_emt_samples.py)
+samples/
+
+# custom
+docs/Convenciones_del_equipo_Notion.pdf
+docs/factoriaF52026_abstract.pdf
+docs/roadmap.md
+docs/data-source-contract-draft.md
