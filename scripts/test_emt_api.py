@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Quick smoke test for EMT Madrid OpenAPI using .env credentials."""
+"""Run a quick EMT Madrid API smoke test using local `.env` credentials.
+
+This script validates four steps end-to-end:
+1) hello endpoint reachability
+2) app login with `X-ClientId` + `passKey`
+3) nearby stops retrieval around Lavapies
+4) arrivals lookup for one discovered stop
+"""
 
 from __future__ import annotations
 
