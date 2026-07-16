@@ -120,16 +120,50 @@ st.markdown(
         background-color: var(--app-bg) !important;
     }}
     [data-testid="stChatInput"] {{
-        background-color: var(--app-bg-card) !important;
+        background-color: var(--app-bg) !important;
         border: var(--app-border-width) solid var(--app-border) !important;
-    }}
-    [data-testid="stChatInput"] textarea {{
         color: var(--app-text) !important;
-        background-color: transparent !important;
+        box-shadow: none !important;
+        color-scheme: dark !important;
     }}
-    [data-testid="stChatInput"] textarea::placeholder {{
+    [data-testid="stChatInput"] > div,
+    [data-testid="stChatInput"] > div > div,
+    [data-testid="stChatInput"] > div > div > div,
+    [data-testid="stChatInput"] div,
+    [data-testid="stChatInput"] textarea,
+    [data-testid="stChatInput"] input,
+    [data-testid="stChatInput"] [contenteditable="true"],
+    [data-testid="stChatInput"] [contenteditable="plaintext-only"] {{
+        color: var(--app-text) !important;
+        background-color: var(--app-bg) !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        caret-color: var(--app-text) !important;
+        -webkit-text-fill-color: var(--app-text) !important;
+        -webkit-appearance: none !important;
+        appearance: none !important;
+        color-scheme: dark !important;
+    }}
+    textarea:focus,
+    input:focus,
+    [contenteditable="true"]:focus,
+    [contenteditable="plaintext-only"]:focus {{
+        color: var(--app-text) !important;
+        background-color: var(--app-bg) !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-text-fill-color: var(--app-text) !important;
+    }}
+    textarea::placeholder,
+    input::placeholder {{
         color: var(--app-text-secondary) !important;
-        opacity: 1;
+        opacity: 1 !important;
+    }}
+    ::selection {{
+        background-color: var(--app-accent) !important;
+        color: var(--app-bg) !important;
     }}
     
 
