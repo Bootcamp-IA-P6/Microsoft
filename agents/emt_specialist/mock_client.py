@@ -7,18 +7,15 @@ en Fabric.
 
 IMPORTANTE (contrato de reemplazo):
 Cuando gold esté listo en Fabric, este archivo se reemplaza por una versión que
-consulta Fabric directamente, MANTENIENDO estas mismas 4 firmas de método.
-El agente (agent.py) y el prompt no deben cambiar ni una línea.
+consulta Fabric directamente.
 
-Fuente de la firma de métodos: mock_fixtures_fase2.json -> "cómo_usar_este_mock"
 """
 
 import json
 from pathlib import Path
 from typing import Optional
 
-# data/mocks/fixtures_fase2.json, relativo a la raíz del repo, sin importar
-# desde qué directorio se ejecute el script.
+# data/mocks/fixtures_fase2.json, relativo a la raíz del repo
 DEFAULT_FIXTURES_PATH = Path(__file__).resolve().parents[2] / "data" / "mocks" / "fixtures_fase2.json"
 
 
@@ -37,19 +34,19 @@ class MockDataClient:
         self._stops_dim = self._data["silver_stops_dim"]
         self._stop_lines = self._data["silver_stop_lines"]
 
-    # ---- Los 4 métodos que el agente usa como tools ----
-
+    # Los 4 métodos que el agente usa como tools
     def get_gold_by_stop(self, stop_id: int) -> list[dict]:
         """Todas las líneas/ETAs para una parada. Equivale a filtrar
         gold_stop_line_eta_latest por stop_id."""
+
         return [row for row in self._gold if row["stop_id"] == stop_id]
 
     def get_gold_by_stop_line(self, stop_id: int, line: str) -> Optional[dict]:
         """Fila exacta (stop_id, line) en gold. Acepta indistintamente el
         código interno (line_id, ej. '001') o la etiqueta visible (line_label,
         ej. 'M1') — así el modelo no necesita memorizar el mapeo por prompt.
-        None si la línea no pasa por esa parada (para distinguir de
-        'sin buses ahora')."""
+        None si la línea no pasa por esa parada."""
+
         line_norm = line.strip().lower()
         for row in self._gold:
             if row["stop_id"] != stop_id:

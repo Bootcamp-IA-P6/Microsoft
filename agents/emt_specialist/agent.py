@@ -1,16 +1,13 @@
 """
 agent.py
-
+--------
 Agente especialista EMT (Fase 3, Issue 3) corriendo contra el mock, usando la
-Anthropic API como backend LLM (Plan B mientras se resuelven accesos Azure).
+Anthropic API como backend LLM.
 
 CONTRATO DE REEMPLAZO:
 - El bloque `call_llm` es el ÚNICO que cambia al migrar a Azure OpenAI /
     Fabric Data Agent, o a otro proveedor (Groq, OpenRouter, NVIDIA NIM...).
     El resto (tools, system prompt, mock_client) no se toca.
-- Cuando Z2 cierre gold real, solo se reemplaza mock_client.py -> fabric_client.py
-    con las mismas 4 firmas.
-
 """
 
 import json
@@ -22,13 +19,13 @@ from anthropic import Anthropic
 
 from mock_client import MockDataClient
 
-# Carga .env desde la raíz del repo, sin importar desde dónde se ejecute el script.
+# Carga .env desde la raíz del repo
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 MODEL = "claude-sonnet-5"  # Sonnet 5 es buen balance costo/calidad para este agente.
 PROMPT_PATH = Path(__file__).resolve().parent / "system_prompt_v1.txt"
 
-# ---- Definición de tools (mapea 1:1 a los métodos de mock_client) ----
+# Definición de tools (mapea 1:1 a los métodos de mock_client)
 
 TOOLS = [
     {
@@ -50,9 +47,9 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "stop_id": {"type": "integer"},
-                "line_id": {"type": "string", "description": "Código de línea, ej. '001' para M1"},
+                "line": {"type": "string", "description": "Código interno (ej. '001') o etiqueta visible (ej. 'M1'), cualquiera de los dos sirve"},
             },
-            "required": ["stop_id", "line_id"],
+            "required": ["stop_id", "line"],
         },
     },
     {
@@ -82,6 +79,10 @@ class EMTAgent:
         with open(prompt_path, "r", encoding="utf-8") as f:
             self.system_prompt = f.read()
 
+        # Parche de seguridad por si Git Bash / Windows arrastran un SSL_CERT_FILE roto (propio)
+        if "SSL_CERT_FILE" in os.environ and not os.path.exists(os.environ["SSL_CERT_FILE"]):
+            del os.environ["SSL_CERT_FILE"]
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError(
@@ -95,7 +96,7 @@ class EMTAgent:
         return method(**tool_input)
 
     def call_llm(self, messages: list) -> dict:
-        """Único punto de contacto con el LLM. Cambiar acá al migrar de proveedor."""
+        """Único punto de contacto con el LLM"""
         return self.llm.messages.create(
             model=MODEL,
             max_tokens=1024,
@@ -133,7 +134,6 @@ class EMTAgent:
                     "content": json.dumps(result, ensure_ascii=False, default=str),
                 })
             messages.append({"role": "user", "content": tool_results})
-
 
 if __name__ == "__main__":
     agent = EMTAgent()

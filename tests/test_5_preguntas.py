@@ -1,11 +1,8 @@
 """
 test_5_preguntas.py
 --------------------
-Corre las 5 preguntas de prueba oficiales (Contexto 1, sección 6) contra el
-agente y muestra la respuesta del agente junto a la esperada, para que el PO
-valide manualmente. No es un assert automático a propósito: la validación de
-"¿es correcto?" la hace una persona, según las reglas de evaluación del proyecto.
-"""
+Corre las 5 preguntas de prueba contra el agente y muestra la respuesta del agente junto a la esperada.
+No es un assert automático a propósito: la validación de "¿es correcto?" la hace una persona"""
 
 import os
 import sys
@@ -15,7 +12,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agents" / "emt_specialist"))
 
 # AGENT_PROVIDER=groq python tests/test_5_preguntas.py  -> usa Groq
-# (sin la variable, usa Anthropic por defecto)
 provider = os.environ.get("AGENT_PROVIDER", "anthropic").lower()
 if provider == "groq":
     from agent_groq import EMTAgent

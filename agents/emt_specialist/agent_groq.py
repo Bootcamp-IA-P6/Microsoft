@@ -2,16 +2,11 @@
 agent_groq.py
 -------------
 Agente especialista EMT adaptado para Groq (SDK compatible con OpenAI).
-Plan B de Plan B: mientras Anthropic API no tiene crédito cargado, esto corre
-gratis contra Groq. Mismo mock_client y system_prompt que agent.py.
 
 NOTA SOBRE EL MODELO:
-llama-3.3-70b-versatile es conocido por generar tool calls mal formadas
-ocasionalmente (error 400 'tool_use_failed', ver docs de Groq:
-https://console.groq.com/docs/tool-use/local-tool-calling). Usamos
-openai/gpt-oss-120b, que es el modelo que la propia documentación de Groq
+Usamos openai/gpt-oss-120b, que es el modelo que la propia documentación de Groq
 usa en sus ejemplos de tool calling por ser más confiable en esto.
-Igual agregamos reintento con temperatura reducida, patrón oficial de Groq
+Igual implementa un reintento con temperatura reducida, patrón oficial de Groq
 para este caso.
 """
 
@@ -32,7 +27,7 @@ from mock_client import MockDataClient
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-MODEL = "openai/gpt-oss-120b"  # más confiable que llama-3.3-70b para tool calling
+MODEL = "openai/gpt-oss-120b"
 PROMPT_PATH = Path(__file__).resolve().parent / "system_prompt_v1.txt"
 MAX_RETRIES = 3
 
@@ -126,6 +121,7 @@ class EMTAgent:
     def call_llm(self, messages: list) -> dict:
         """Llamada al LLM con reintento en caso de tool call mal formada
         (patrón oficial de Groq para el error tool_use_failed)."""
+
         formatted_messages = [{"role": "system", "content": self.system_prompt}] + messages
         temperature = 0.7
 
@@ -143,7 +139,7 @@ class EMTAgent:
                 is_tool_error = getattr(e, "status_code", None) == 400
                 if is_tool_error and attempt < MAX_RETRIES - 1:
                     temperature = max(temperature - 0.2, 0.1)
-                    print(f"  [retry] tool call falló, reintentando con temperature={temperature}")
+                    print(f"  [retry] tool call falló, reintentando con temperature= {temperature}")
                     time.sleep(0.5)
                     continue
                 raise
@@ -158,9 +154,7 @@ class EMTAgent:
             if not response_message.tool_calls:
                 return response_message.content
 
-            # Guardamos el mensaje del asistente como dict explícito (no el
-            # objeto del SDK), para evitar problemas de serialización en la
-            # siguiente vuelta del loop.
+            # Guardamos el mensaje del asistente como dict explícito
             messages.append({
                 "role": "assistant",
                 "content": response_message.content,
