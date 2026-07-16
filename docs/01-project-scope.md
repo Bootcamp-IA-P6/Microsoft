@@ -195,7 +195,7 @@ These do not change scope rules; they operationalize them:
 ## Appendix A — Changes from data-source-contract v2 → v3
 
 Preserved from PO frozen contract §0 (`docs/data-source-contract-v3.md`).  
-**Clarification:** row 2’s legacy label “US-05” meant **incident tables postponed**, which conflicts with HU **US-05 = chat UI**. In `docs1`, incidents stay Phase 3+ / out of MVP data; chat remains HU US-05 (frontend).
+**Clarification:** row 2’s legacy label “US-05” meant **incident tables postponed**, which conflicts with HU **US-05 = chat UI**. In these structured docs (`01`–`05`), incidents stay Phase 3+ / out of MVP data; chat remains HU US-05 (frontend).
 
 | # | Change |
 |---|---|
