@@ -53,14 +53,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_gold_by_stop_line",
-            "description": "Devuelve el ETA de una línea específica en una parada específica. Devuelve null si la línea no pasa por esa parada.",
+            "description": "Devuelve el ETA de una línea específica en una parada específica. Devuelve null si la línea no pasa por esa parada. Usa el parámetro 'line' para el código o etiqueta de la línea.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "stop_id": {"type": "integer"},
-                    "line": {"type": "string", "description": "Código interno (ej. '001') o etiqueta visible (ej. 'M1'), cualquiera de los dos sirve"},
+                    "line": {"type": "string", "description": "Código interno (ej. '001') o etiqueta visible (ej. 'M1')"},
+                    "line_id": {"type": "string", "description": "Alias de 'line', no usar si ya se envía 'line'"},
+                    "line_code": {"type": "string", "description": "Alias de 'line', no usar si ya se envía 'line'"},
                 },
-                "required": ["stop_id", "line"],
+                "required": ["stop_id"],
             },
         },
     },

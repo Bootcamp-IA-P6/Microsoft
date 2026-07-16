@@ -44,11 +44,17 @@ class MockDataClient:
         gold_stop_line_eta_latest por stop_id."""
         return [row for row in self._gold if row["stop_id"] == stop_id]
 
-    def get_gold_by_stop_line(self, stop_id: int, line_id: str) -> Optional[dict]:
-        """Fila exacta (stop_id, line_id) en gold. None si la línea no pasa
-        por esa parada (para distinguir de 'sin buses ahora')."""
+    def get_gold_by_stop_line(self, stop_id: int, line: str) -> Optional[dict]:
+        """Fila exacta (stop_id, line) en gold. Acepta indistintamente el
+        código interno (line_id, ej. '001') o la etiqueta visible (line_label,
+        ej. 'M1') — así el modelo no necesita memorizar el mapeo por prompt.
+        None si la línea no pasa por esa parada (para distinguir de
+        'sin buses ahora')."""
+        line_norm = line.strip().lower()
         for row in self._gold:
-            if row["stop_id"] == stop_id and row["line_id"] == line_id:
+            if row["stop_id"] != stop_id:
+                continue
+            if row["line_id"].lower() == line_norm or row["line_label"].lower() == line_norm:
                 return row
         return None
 
