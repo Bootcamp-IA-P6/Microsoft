@@ -21,17 +21,20 @@ import streamlit as st
 
 import agent_client
 from i18n import LANGUAGES, t
-from themes import THEMES, APP_NAME, get_theme
+from themes import THEMES, APP_TITLE, APP_TAGLINE, APP_USAGE, get_theme
 
 FEEDBACK_LOG = Path(__file__).parent / "feedback_log.jsonl"
+MAP_IMAGE_PATH = Path(__file__).parent / "assets" / "mapa.png"
+NAVI_ICON_PATH = Path(__file__).parent / "assets" / "navi_icon.svg"
+NAVI_AVATAR_PATH = Path(__file__).parent / "assets" / "navi_avatar.svg"
 
 
 # ---------------------------------------------------------------------------
 # Configuración de página
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title=APP_NAME,
-    page_icon="🚌",
+    page_title=f"{APP_TITLE} —  {APP_TAGLINE}",
+    page_icon=str(NAVI_ICON_PATH),
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -66,6 +69,7 @@ st.markdown(
     f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
     html, body, [class*="css"] {{
         font-family: 'Nunito', sans-serif;
@@ -113,7 +117,7 @@ st.markdown(
     [data-testid="stAppScrollToBottomContainer"],
     [data-testid="stBottomBlockContainer"],
     [data-testid="stChatInputContainer"] {{
-        background-color: var(--app-bg);
+        background-color: var(--app-bg) !important;
     }}
     [data-testid="stChatInput"] {{
         background-color: var(--app-bg-card) !important;
@@ -126,6 +130,40 @@ st.markdown(
     [data-testid="stChatInput"] textarea::placeholder {{
         color: var(--app-text-secondary) !important;
         opacity: 1;
+    }}
+    
+
+    /* Fondo de la zona de chat, que se quedaba blanco al hacer scroll y desplegable del mapa */
+    [data-testid="stBottom"] > div {{
+        background-color: var(--app-bg) !important;
+    }}
+    [data-testid="stExpander"] {{
+        background-color: var(--app-bg-card) !important;
+        border: var(--app-border-width) solid var(--app-border) !important;
+        border-radius: 12px !important;
+    }}
+    [data-testid="stExpander"] > div:first-child {{
+        background-color: var(--app-bg-card) !important;
+        color: var(--app-text) !important;
+        border-radius: 12px !important;
+    }}
+    [data-testid="stExpander"] > div:nth-child(2) {{
+        background-color: var(--app-bg-card) !important;
+        color: var(--app-text) !important;
+        border-radius: 0 0 12px 12px !important;
+    }}
+    [data-testid="stExpander"] summary {{
+        background-color: var(--app-bg-card) !important;
+        color: var(--app-text) !important;
+    }}
+    [data-testid="stExpander"] summary span {{
+        color: var(--app-text) !important;
+    }}
+    [data-testid="stExpander"] * {{
+        color: var(--app-text) !important;
+    }}
+    [data-testid="stExpander"]:hover {{
+        background-color: var(--app-bg-card) !important;
     }}
 
     /* Desplegables (idioma / tema) y sus menús emergentes */
@@ -157,10 +195,20 @@ st.markdown(
         font-weight: 800;
         color: var(--app-primary);
         margin-bottom: 0.1em;
+        font-family: 'Nunito', sans-serif;
     }}
-    .app-subtitle {{
+    .app-tagline {{
+        color: var(--app-primary);
+        margin-bottom: 0.25em;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+        font-size: 0.95em;
+    }}
+    .app-usage {{
         color: var(--app-text-secondary);
         margin-bottom: 1.1em;
+        font-family: 'Poppins', sans-serif;
+        font-size: 0.92em;
     }}
 
     .backend-badge {{
@@ -256,13 +304,23 @@ with st.sidebar:
         st.session_state.theme_mode = new_theme_mode
         st.rerun()
 
-    text_size_choice = st.radio(
-        t(lang, "sidebar_text_size"),
-        options=["normal", "large"],
-        format_func=lambda v: t(lang, f"text_size_{v}"),
-        index=0 if st.session_state.text_size == "normal" else 1,
-        horizontal=True,
+    st.markdown(
+        "<div style='margin-top: 0.7rem; margin-bottom: 0.4rem; font-weight: 700;'>Tamaño de texto</div>",
+        unsafe_allow_html=True,
     )
+    left_col, switch_col, right_col = st.columns([2.2, 1.2, 2.2])
+    with left_col:
+        st.caption("Normal")
+    with switch_col:
+        text_size_enabled = st.toggle(
+            "",
+            value=st.session_state.text_size == "large",
+            key="text_size_switch",
+        )
+    with right_col:
+        st.caption("Grande")
+
+    text_size_choice = "large" if text_size_enabled else "normal"
     if text_size_choice != st.session_state.text_size:
         st.session_state.text_size = text_size_choice
         st.rerun()
@@ -281,8 +339,23 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Cabecera
 # ---------------------------------------------------------------------------
-st.markdown(f"<div class='app-title'>🚌 {APP_NAME}</div>", unsafe_allow_html=True)
-st.markdown(f"<div class='app-subtitle'>{t(lang, 'app_subtitle')}</div>", unsafe_allow_html=True)
+header_col1, header_col2 = st.columns([1, 8])
+with header_col1:
+    st.image(str(NAVI_ICON_PATH), width=48)
+with header_col2:
+    st.markdown(
+        f"<div class='app-title' style='display: inline-block; margin-bottom: 0.1em; margin-right: 0.4em;'>{APP_TITLE}</div>"
+        f"<div class='app-tagline' style='display: inline-block; margin-bottom: 0.1em;'> —  {APP_TAGLINE}</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(f"<div class='app-usage' style='margin-top: 0; margin-bottom: 0.8em;'>{APP_USAGE}</div>", unsafe_allow_html=True)
+
+if MAP_IMAGE_PATH.exists():
+    with st.expander("🗺️ Ver mapa del alcance"):
+        st.caption("Mapa del alcance del servicio")
+        st.image(str(MAP_IMAGE_PATH), use_container_width=True)
+else:
+    st.info("Añade tu imagen PNG en la carpeta assets con el nombre mapa.png para mostrar el mapa del alcance.")
 
 _badge_class = {
     "mock": "backend-mock",
@@ -301,11 +374,12 @@ st.markdown(
 # Historial de chat
 # ---------------------------------------------------------------------------
 if not st.session_state.history:
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=str(NAVI_AVATAR_PATH)):
         st.write(t(lang, "welcome"))
 
 for i, msg in enumerate(st.session_state.history):
-    with st.chat_message(msg["role"]):
+    avatar = str(NAVI_AVATAR_PATH) if msg["role"] == "assistant" else None
+    with st.chat_message(msg["role"], avatar=avatar):
         st.write(msg["content"])
 
         if msg["role"] == "assistant":
@@ -351,7 +425,7 @@ if question:
     with st.chat_message("user"):
         st.write(question)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=str(NAVI_AVATAR_PATH)):
         with st.spinner(t(lang, "thinking")):
             answer_text, backend_used = agent_client.ask(question, lang=lang)
         st.write(answer_text)
