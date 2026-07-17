@@ -14,12 +14,18 @@ Cómo cambiar de backend (mock / local / azure):
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
 
 import agent_client
+
+try:
+    import azure.cognitiveservices.speech as speechsdk
+except ImportError:  # pragma: no cover - fallback para entornos sin paquete aún instalado
+    speechsdk = None
 from i18n import LANGUAGES, t
 from themes import THEMES, APP_TITLE, APP_TAGLINE, APP_USAGE, get_theme
 
@@ -27,6 +33,57 @@ FEEDBACK_LOG = Path(__file__).parent / "feedback_log.jsonl"
 MAP_IMAGE_PATH = Path(__file__).parent / "assets" / "mapa.png"
 NAVI_ICON_PATH = Path(__file__).parent / "assets" / "navi_icon.svg"
 NAVI_AVATAR_PATH = Path(__file__).parent / "assets" / "navi_avatar.svg"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_env_file() -> None:
+    """Carga variables desde el archivo .env del proyecto si existe."""
+    env_path = PROJECT_ROOT / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_env_file()
+
+
+def transcribe_from_microphone() -> tuple[str | None, str | None]:
+    """Transcribe una frase desde el micrófono usando Azure Speech."""
+    if speechsdk is None:
+        return None, "La librería azure-cognitiveservices-speech no está instalada."
+
+    region = st.session_state.get("azure_speech_region", "") or os.getenv("AZURE_SPEECH_REGION", "")
+    key = st.session_state.get("azure_speech_key", "") or os.getenv("AZURE_SPEECH_KEY", "")
+    language = st.session_state.get("azure_speech_language", "") or os.getenv("AZURE_SPEECH_LANGUAGE", "es-ES")
+
+    if not region or not key:
+        return None, "Faltan AZURE_SPEECH_REGION o AZURE_SPEECH_KEY en el archivo .env."
+
+    try:
+        speech_config = speechsdk.SpeechConfig(subscription=key, region=region)
+        speech_config.speech_recognition_language = language
+        audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
+        recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+
+        result = recognizer.recognize_once_async().get()
+
+        if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+            return result.text, None
+        if result.reason == speechsdk.ResultReason.NoMatch:
+            return None, "No se detectó voz. Inténtalo de nuevo."
+        if result.reason == speechsdk.ResultReason.Canceled:
+            cancellation_details = speechsdk.CancellationDetails.from_result(result)
+            return None, f"Reconocimiento cancelado: {cancellation_details.reason}"
+        return None, "No se pudo transcribir la voz."
+    except Exception as exc:  # pragma: no cover - depende del entorno del usuario
+        return None, f"Error al conectar con Azure Speech: {exc}"
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +110,16 @@ if "history" not in st.session_state:
     st.session_state.history = []  # [{"role", "content", "backend"?}]
 if "feedback_given" not in st.session_state:
     st.session_state.feedback_given = set()
+if "azure_speech_region" not in st.session_state:
+    st.session_state.azure_speech_region = os.getenv("AZURE_SPEECH_REGION", "")
+if "azure_speech_key" not in st.session_state:
+    st.session_state.azure_speech_key = os.getenv("AZURE_SPEECH_KEY", "")
+if "azure_speech_language" not in st.session_state:
+    st.session_state.azure_speech_language = os.getenv("AZURE_SPEECH_LANGUAGE", "es-ES")
+if "chat_input_text" not in st.session_state:
+    st.session_state.chat_input_text = ""
+if "voice_status" not in st.session_state:
+    st.session_state.voice_status = ""
 
 lang = st.session_state.lang
 theme = get_theme(st.session_state.theme_mode)
@@ -452,21 +519,49 @@ for i, msg in enumerate(st.session_state.history):
 # ---------------------------------------------------------------------------
 # Input del usuario
 # ---------------------------------------------------------------------------
-question = st.chat_input(t(lang, "chat_placeholder"))
+with st.form("chat_form", clear_on_submit=False):
+    cols = st.columns([7, 1, 1])
+    with cols[0]:
+        question = st.text_input(
+            "",
+            key="chat_input_text",
+            label_visibility="collapsed",
+            placeholder=t(lang, "chat_placeholder"),
+        )
+    with cols[1]:
+        send_clicked = st.form_submit_button("➤", help=t(lang, "send_message"))
+    with cols[2]:
+        mic_clicked = st.form_submit_button("🎙️", help=t(lang, "voice_button_help"))
 
-if question:
-    st.session_state.history.append({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.write(question)
+    if mic_clicked:
+        transcript, error = transcribe_from_microphone()
+        if transcript:
+            st.session_state.chat_input_text = transcript
+            st.session_state.voice_status = t(lang, "voice_transcribed")
+            st.toast(t(lang, "voice_transcribed"))
+        else:
+            st.session_state.voice_status = error or t(lang, "voice_error")
+            st.toast(error or t(lang, "voice_error"))
+        st.rerun()
 
-    with st.chat_message("assistant", avatar=str(NAVI_AVATAR_PATH)):
-        with st.spinner(t(lang, "thinking")):
-            answer_text, backend_used = agent_client.ask(question, lang=lang)
-        st.write(answer_text)
+    if send_clicked and question:
+        st.session_state.history.append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.write(question)
 
-    st.session_state.history.append({
-        "role": "assistant",
-        "content": answer_text,
-        "backend": backend_used,
-    })
-    st.rerun()
+        with st.chat_message("assistant", avatar=str(NAVI_AVATAR_PATH)):
+            with st.spinner(t(lang, "thinking")):
+                answer_text, backend_used = agent_client.ask(question, lang=lang)
+            st.write(answer_text)
+
+        st.session_state.history.append({
+            "role": "assistant",
+            "content": answer_text,
+            "backend": backend_used,
+        })
+        st.session_state.chat_input_text = ""
+        st.session_state.voice_status = ""
+        st.rerun()
+
+if st.session_state.get("voice_status"):
+    st.caption(st.session_state["voice_status"])
