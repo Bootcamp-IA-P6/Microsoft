@@ -1,0 +1,163 @@
+{
+  "gold_stop_line_eta_latest": [
+    {
+      "stop_id": 723,
+      "line_id": "001",
+      "line_label": "1",
+      "destination": "PROSPERIDAD",
+      "eta_seconds": 300,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 723,
+      "line_id": "003",
+      "line_label": "3",
+      "destination": "SAN AMARO",
+      "eta_seconds": 540,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 723,
+      "line_id": "046",
+      "line_label": "46",
+      "destination": "SOL SEVILLA",
+      "eta_seconds": null,
+      "has_upcoming_bus": false,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 723,
+      "line_id": "074",
+      "line_label": "74",
+      "destination": "PARQUE AVENIDAS",
+      "eta_seconds": 960,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 4039,
+      "line_id": "601",
+      "line_label": "M1",
+      "destination": "SOL SEVILLA",
+      "eta_seconds": 597,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 4039,
+      "line_id": "603",
+      "line_label": "M3",
+      "destination": "PUERTA DEL SOL/SEVILLA",
+      "eta_seconds": 521,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 4039,
+      "line_id": "362",
+      "line_label": "002",
+      "destination": "ARGÜELLES",
+      "eta_seconds": 956,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 5837,
+      "line_id": "601",
+      "line_label": "M1",
+      "destination": "EMBAJADORES",
+      "eta_seconds": 106,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    },
+    {
+      "stop_id": 4094,
+      "line_id": "046",
+      "line_label": "46",
+      "destination": "MONCLOA",
+      "eta_seconds": 149,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-14T11:41:00Z"
+    }
+  ],
+  "silver_stops_dim": [
+    {
+      "stop_id": 723,
+      "stop_name": "Gran Via-Callao",
+      "stop_lat": 40.420078,
+      "stop_lon": -3.704287,
+      "direction_text": "Gran Via, 33"
+    },
+    {
+      "stop_id": 4094,
+      "stop_name": "Gran Via-Montera",
+      "stop_lat": 40.420164,
+      "stop_lon": -3.701966,
+      "direction_text": "Gran Via, 28"
+    },
+    {
+      "stop_id": 4039,
+      "stop_name": "Canalejas",
+      "stop_lat": 40.416225,
+      "stop_lon": -3.700751,
+      "direction_text": "Cruz, 1"
+    },
+    {
+      "stop_id": 5837,
+      "stop_name": "Sevilla",
+      "stop_lat": 40.417315,
+      "stop_lon": -3.700126,
+      "direction_text": "Sevilla, 5"
+    }
+  ],
+  "silver_stop_lines": [
+    {"stop_id": 723, "line_id": "361", "line_label": "001"},
+    {"stop_id": 723, "line_id": "001", "line_label": "1"},
+    {"stop_id": 723, "line_id": "146", "line_label": "146"},
+    {"stop_id": 723, "line_id": "002", "line_label": "2"},
+    {"stop_id": 723, "line_id": "003", "line_label": "3"},
+    {"stop_id": 723, "line_id": "046", "line_label": "46"},
+    {"stop_id": 723, "line_id": "074", "line_label": "74"},
+    {"stop_id": 723, "line_id": "516", "line_label": "N16"},
+    {"stop_id": 723, "line_id": "518", "line_label": "N18"},
+    {"stop_id": 723, "line_id": "519", "line_label": "N19"},
+    {"stop_id": 723, "line_id": "520", "line_label": "N20"},
+    {"stop_id": 723, "line_id": "521", "line_label": "N21"},
+    {"stop_id": 4094, "line_id": "361", "line_label": "001"},
+    {"stop_id": 4094, "line_id": "362", "line_label": "002"},
+    {"stop_id": 4094, "line_id": "001", "line_label": "1"},
+    {"stop_id": 4094, "line_id": "146", "line_label": "146"},
+    {"stop_id": 4094, "line_id": "002", "line_label": "2"},
+    {"stop_id": 4094, "line_id": "046", "line_label": "46"},
+    {"stop_id": 4094, "line_id": "074", "line_label": "74"},
+    {"stop_id": 4094, "line_id": "516", "line_label": "N16"},
+    {"stop_id": 4094, "line_id": "518", "line_label": "N18"},
+    {"stop_id": 4094, "line_id": "519", "line_label": "N19"},
+    {"stop_id": 4094, "line_id": "520", "line_label": "N20"},
+    {"stop_id": 4094, "line_id": "521", "line_label": "N21"},
+    {"stop_id": 4039, "line_id": "362", "line_label": "002"},
+    {"stop_id": 4039, "line_id": "601", "line_label": "M1"},
+    {"stop_id": 4039, "line_id": "603", "line_label": "M3"},
+    {"stop_id": 5837, "line_id": "601", "line_label": "M1"}
+  ]
+}
