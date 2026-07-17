@@ -1,9 +1,15 @@
 # Source Contract — EMT Madrid API & GTFS
 
-**Version:** 1.1  
-**Last updated:** 2026-07-16  
+**Version:** 1.2  
+**Last updated:** 2026-07-17  
 **Status:** Active  
 **Sources:** PO `docs/data-source-contract-v3.md` (§1 catalogue URL, §10 request body, 250k limit); companion `docs/api-response-reference.md` for JSON shapes
+
+### Changelog 1.1 → 1.2
+
+| # | Change |
+|---|---|
+| 1 | §4 request body: removed `Text_LineInfoRequired_YN` — not in official EMT API docs ([apidocs.emtmadrid.es](https://apidocs.emtmadrid.es/)); introduced by mistake in internal scripts. Line metadata in `StopInfo.lines[]` is obtained via `Text_StopRequired_YN: "Y"`. |
 
 ---
 
@@ -47,7 +53,6 @@ Headers: `accessToken`, `Content-Type: application/json`
   "cultureInfo": "es",
   "Text_StopRequired_YN": "Y",
   "Text_EstimationsRequired_YN": "Y",
-  "Text_LineInfoRequired_YN": "Y",
   "Text_IncidencesRequired_YN": "N"
 }
 ```
@@ -57,7 +62,6 @@ Headers: `accessToken`, `Content-Type: application/json`
 | `cultureInfo` | `"es"` | Language of texts |
 | `Text_StopRequired_YN` | `"Y"` | Stop metadata in response |
 | `Text_EstimationsRequired_YN` | `"Y"` | Arrival estimates (ETA) |
-| `Text_LineInfoRequired_YN` | `"Y"` | Line metadata for the stop |
 | `Text_IncidencesRequired_YN` | `"N"` | No incidents (out of MVP; PO §5) |
 
 ### Envelope
