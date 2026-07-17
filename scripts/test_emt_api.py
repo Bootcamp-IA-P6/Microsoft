@@ -124,7 +124,6 @@ def main() -> int:
             "cultureInfo": "es",
             "Text_StopRequired_YN": "Y",
             "Text_EstimationsRequired_YN": "Y",
-            "Text_LineInfoRequired_YN": "Y",
             "Text_IncidencesRequired_YN": "Y",
         },
     )
