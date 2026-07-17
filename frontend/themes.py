@@ -11,7 +11,7 @@ Nombre de la app en un solo sitio — cámbialo aquí si "ParaBus" no convence.
 
 APP_TITLE = "NAVI"
 APP_TAGLINE = "Tu copiloto de movilidad"
-APP_USAGE = "Pregunta en tu idioma cuándo llega tu autobús en el centro de Madrid"
+APP_USAGE = "Pregunta cuándo llega tu autobús en el centro de Madrid"
 
 THEMES = {
     "colorblind": {

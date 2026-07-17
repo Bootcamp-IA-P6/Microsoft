@@ -26,7 +26,7 @@ try:
     import azure.cognitiveservices.speech as speechsdk
 except ImportError:  # pragma: no cover - fallback para entornos sin paquete aún instalado
     speechsdk = None
-from i18n import LANGUAGES, t
+from idioms_dict import LANGUAGES, t
 from themes import THEMES, APP_TITLE, APP_TAGLINE, APP_USAGE, get_theme
 
 FEEDBACK_LOG = Path(__file__).parent / "feedback_log.jsonl"
@@ -343,6 +343,20 @@ st.markdown(
         border-radius: 12px !important;
     }}
     .stButton > button {{
+        background-color: var(--app-bg-card) !important;
+        color: var(--app-text) !important;
+        border: var(--app-border-width) solid var(--app-border) !important;
+    }}
+    div[data-testid="stFormSubmitButton"] button {{
+        background-color: var(--app-accent) !important;
+        color: var(--app-bg) !important;
+        border: var(--app-border-width) solid var(--app-accent) !important;
+        box-shadow: none !important;
+    }}
+    div[data-testid="stFormSubmitButton"] button:hover {{
+        filter: brightness(0.95) !important;
+    }}
+    div[data-testid="stFormSubmitButton"]:nth-child(2) button {{
         background-color: var(--app-bg-card) !important;
         color: var(--app-text) !important;
         border: var(--app-border-width) solid var(--app-border) !important;
