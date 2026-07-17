@@ -53,7 +53,6 @@ ARRIVES_BODY = json.dumps(
         "cultureInfo": "es",
         "Text_StopRequired_YN": "Y",
         "Text_EstimationsRequired_YN": "Y",
-        "Text_LineInfoRequired_YN": "Y",
         "Text_IncidencesRequired_YN": "N",
     }
 ).encode("utf-8")
