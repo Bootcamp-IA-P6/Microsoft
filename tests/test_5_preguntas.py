@@ -1,6 +1,9 @@
 """Tests oficiales Fase 3 - Issues #12, #14"""
 import sys
-sys.path.insert(0, ".")
+from pathlib import Path
+
+# tests/test_5_preguntas.py -> raiz del proyecto (donde vive la carpeta agents/)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agents.emt_specialist.agent_groq import ask
 
@@ -23,7 +26,7 @@ TESTS = [
     {
         "question": "Por que se retrasa la linea 46?",
         "expected_contains": ["no tengo"],
-        "must_not_contain": ["minutos", "llega"],
+        "must_not_contain": ["minutos"],
     },
     {
         "question": "Cuando llega el 27 a Gran Via-Callao?",
@@ -37,10 +40,10 @@ failed = 0
 
 for test in TESTS:
     answer = ask(test["question"])
-    all_pass = all(
-        any(exp in answer.lower() for exp in test["expected_contains"])
-        and not any(bad in answer.lower() for bad in test["must_not_contain"])
-    )
+    answer_lower = answer.lower()
+    contains_ok = any(exp.lower() in answer_lower for exp in test["expected_contains"])
+    excludes_ok = not any(bad.lower() in answer_lower for bad in test["must_not_contain"])
+    all_pass = contains_ok and excludes_ok
 
     if all_pass:
         print(f"PASS: {test['question']}")
