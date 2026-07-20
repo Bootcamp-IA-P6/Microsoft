@@ -1,7 +1,7 @@
 # Fase 1 — Fuente de datos: EMT Madrid
 
 **Estado:** Cerrado
-**Referencia completa:** [`data-source-contract-v3.md`](./data-source-contract-v3.md)
+**Referencia completa:** [`data-source-contract-v4.md`](./data-source-contract-v4.md)
 
 ## Resumen
 
@@ -17,4 +17,4 @@ Se eligió la API de EMT Madrid (MobilityLabs) como fuente de datos porque expon
 | **Cambios no anunciados en el catálogo GTFS** | El catálogo estático (paradas, líneas, cabeceras) se carga una vez (`catalog_loaded_at`); si CRTM actualiza el GTFS, el sistema no lo detecta automáticamente. | Fuera de alcance del MVP. Recarga manual si se detecta desalineación entre `silver_stop_lines` y la realidad. |
 
 ## Referencias
-- Contrato completo de datos: [`data-source-contract-v3.md`](./data-source-contract-v3.md)
+- Contrato completo de datos: [`data-source-contract-v4.md`](./data-source-contract-v4.md)
