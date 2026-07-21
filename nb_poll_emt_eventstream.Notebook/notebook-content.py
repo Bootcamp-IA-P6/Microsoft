@@ -16,10 +16,6 @@
 # META           "id": "6fc8888d-9aaf-46c0-b6fc-5aace3d34640"
 # META         }
 # META       ]
-# META     },
-# META     "environment": {
-# META       "environmentId": "fe076382-f415-4fda-b39c-e8019c36ad8a",
-# META       "workspaceId": "8bfdf6eb-bff5-4647-9484-daa63a5b7ff0"
 # META     }
 # META   }
 # META }

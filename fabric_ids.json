@@ -8,7 +8,8 @@
   "environment": {
     "name": "env_emt_pipeline",
     "logical_id": "fe076382-f415-4fda-b39c-e8019c36ad8a",
-    "notes": "Git/.platform logicalId. Notebook metadata uses this as environmentId with the real workspace_id (not 00000000)."
+    "bind_in_notebook_metadata": false,
+    "notes": "Do NOT put environment in notebook-content.py metadata — Fabric rebinds on open and can flip thin Git content back to a stale workspace draft. Set Workspace default Environment = env_emt_pipeline instead (Data Engineering Spark settings)."
   },
   "package": {
     "name": "emt_pipeline",
