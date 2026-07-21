@@ -1,0 +1,17 @@
+{
+  "workspace_id": "8bfdf6eb-bff5-4647-9484-daa63a5b7ff0",
+  "workspace_url": "https://app.fabric.microsoft.com/groups/8bfdf6eb-bff5-4647-9484-daa63a5b7ff0/list?experience=fabric-developer",
+  "lakehouse": {
+    "id": "6fc8888d-9aaf-46c0-b6fc-5aace3d34640",
+    "name": "lh_emt_madrid"
+  },
+  "environment": {
+    "name": "env_emt_pipeline",
+    "logical_id": "fe076382-f415-4fda-b39c-e8019c36ad8a",
+    "notes": "Git/.platform logicalId. Notebook metadata uses this as environmentId with the real workspace_id (not 00000000)."
+  },
+  "package": {
+    "name": "emt_pipeline",
+    "version_source": "pyproject.toml"
+  }
+}
