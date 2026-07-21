@@ -43,7 +43,7 @@ print("If you still see CREATE TABLE / long SQL bodies, discard workspace notebo
 # CELL ********************
 
 gtfs_zip_path = "/lakehouse/default/Files/gtfs/gtfs_emt.zip"  # @param {type:"string"}
-gtfs_zip_url = ""  # @param {type:"string"}
+gtfs_zip_url = "https://datos.emtmadrid.es/dataset/9b23259a-4491-494b-9695-36a7709b2c12/resource/3cba2058-9833-422c-a704-bf992d31d2ee/download/gtfs_emt.zip"  # @param {type:"string"}
 geofence_lat = 40.416729  # @param {type:"number"}
 geofence_lon = -3.703339  # @param {type:"number"}
 geofence_radius_m = 600  # @param {type:"number"}

@@ -42,7 +42,7 @@ print("If you still see CREATE TABLE / long SQL bodies, discard workspace notebo
 
 # CELL ********************
 
-stale_after_sec = 180  # @param {type:"number"}
+stale_after_sec = 540  # @param {type:"number"}  # POC trial: 3×180s poll; contract target 180s when poll=60s
 bronze_table = "bronze_emt_raw"  # @param {type:"string"}
 incremental = True  # @param {type:"boolean"}
 freq_min_samples = 20  # @param {type:"number"}

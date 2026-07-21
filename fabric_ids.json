@@ -14,5 +14,15 @@
   "package": {
     "name": "emt_pipeline",
     "version_source": "pyproject.toml"
+  },
+  "gtfs": {
+    "zip_path": "/lakehouse/default/Files/gtfs/gtfs_emt.zip",
+    "zip_url": "https://datos.emtmadrid.es/dataset/9b23259a-4491-494b-9695-36a7709b2c12/resource/3cba2058-9833-422c-a704-bf992d31d2ee/download/gtfs_emt.zip"
+  },
+  "cadence_poc": {
+    "arrives_poll_sec": 180,
+    "transform_with_poll": true,
+    "stale_after_sec": 540,
+    "notes": "POC trial 3 min. Contract (ADR-029) target arrives ~60s / stale 180s — tighten later."
   }
 }

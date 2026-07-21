@@ -44,8 +44,8 @@ print("If you still see CREATE TABLE / long SQL bodies, discard workspace notebo
 
 stop_ids = ""  # @param {type:"string"}
 variable_library_name = "var_emt_madrid"  # @param {type:"string"}
-poll_interval_sec = 60  # @param {type:"number"}
-max_rounds = 30  # @param {type:"number"}
+poll_interval_sec = 180  # @param {type:"number"}  # POC trial: 3 min (contract target ~60s)
+max_rounds = 1  # @param {type:"number"}  # Pipeline fires every 3 min → one poll round per run
 max_retries_per_stop = 2  # @param {type:"number"}
 token_skew_sec = 90  # @param {type:"number"}
 eventstream_connection_string = ""  # @param {type:"string"}
