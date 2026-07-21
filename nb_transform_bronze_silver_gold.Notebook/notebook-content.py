@@ -22,7 +22,7 @@
 
 # MARKDOWN ********************
 
-# # Transform bronze→silver→gold (thin v0.1.1)
+# # Transform bronze→silver→gold (thin v0.1.2)
 #
 # Calls `emt_pipeline.transform.run_transform`.
 

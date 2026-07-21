@@ -22,7 +22,7 @@
 
 # MARKDOWN ********************
 
-# # Create tables (thin v0.1.1)
+# # Create tables (thin v0.1.2)
 #
 # Calls `emt_pipeline.tables.recreate_tables` — DROP legacy + recreate contract tables.
 
