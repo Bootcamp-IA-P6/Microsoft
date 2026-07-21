@@ -22,7 +22,7 @@
 
 # MARKDOWN ********************
 
-# # Bootstrap silver_emt (thin v0.1.2)
+# # Bootstrap silver_emt (thin v0.1.3)
 #
 # Calls `emt_pipeline.bootstrap.run_bootstrap`.
 

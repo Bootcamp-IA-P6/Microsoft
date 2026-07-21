@@ -22,7 +22,7 @@
 
 # MARKDOWN ********************
 
-# # Poll EMT → Eventstream (thin v0.1.2)
+# # Poll EMT → Eventstream (thin v0.1.3)
 #
 # Calls `emt_pipeline.poller.run_eventstream_poller`.
 

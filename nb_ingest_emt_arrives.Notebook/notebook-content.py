@@ -22,7 +22,7 @@
 
 # MARKDOWN ********************
 
-# # Direct ingest fallback (thin v0.1.2)
+# # Direct ingest fallback (thin v0.1.3)
 #
 # Calls `emt_pipeline.direct_ingest.run_direct_ingest`.
 

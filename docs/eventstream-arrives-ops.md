@@ -87,6 +87,7 @@ SoT: `fabric_ids.json` → `gtfs.zip_url`
 - Schedule: 매일 1회 (예: 06:00 Europe/Madrid)
 - **포함 금지:** `nb_create_tables`
 - GTFS는 `gtfs_zip_url`로 **자동 다운로드** (`emt_pipeline` ≥0.1.2: `requests` + 재시도 + SSL fallback). Fabric에서 옛 `urlretrieve` SSL EOF가 나던 경로를 대체함.
+- EMT OpenAPI(`login` / `line_stops` / `arrives`)도 `http_json`이 **requests + 재시도** (`emt_pipeline` ≥0.1.3). 같은 SSL EOF가 line_stops에서 나던 문제 대응.
 
 ### `pl_emt_arrives` — 3분마다 (POC)
 

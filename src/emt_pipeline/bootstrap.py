@@ -338,6 +338,7 @@ def run_bootstrap(
             )
             if str(payload.get("code", "")) != "00":
                 print(f"  line_stops {lid}/{path}: api_code={payload.get('code')}")
+                time.sleep(0.2)
                 continue
 
             meta = line_meta.get(lid, {})

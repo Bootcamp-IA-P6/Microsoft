@@ -2,8 +2,6 @@ import hashlib
 import json
 import re
 import time
-import urllib.error
-import urllib.request
 import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -22,6 +20,14 @@ ARRIVES_BODY = json.dumps(
     }
 ).encode("utf-8")
 AUTH_API_CODES = frozenset({"80", "81", "82", "83", "89", "90"})
+HTTP_HEADERS_BASE = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; emt-pipeline/0.1; "
+        "+https://github.com/Bootcamp-IA-P6/Microsoft)"
+    ),
+    "Accept": "application/json,text/plain,*/*",
+    "Connection": "close",
+}
 
 
 class TokenExpiredError(RuntimeError):
@@ -79,18 +85,113 @@ def load_eventstream_connection_string(library_name: str, override: str) -> str:
     return conn
 
 
-def http_json(method: str, path: str, headers=None, body=None, timeout: int = 30) -> tuple[dict, int]:
-    req = urllib.request.Request(
-        f"{BASE_URL}{path}", data=body, headers=headers or {}, method=method
-    )
+def _is_transient_http_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    if "unexpected_eof" in msg or "ssl" in msg or "connection" in msg or "timed out" in msg:
+        return True
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8")), int(resp.status)
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        if exc.code == 401:
-            raise TokenExpiredError(f"HTTP 401 on {path}: {raw[:200]}") from exc
-        raise RuntimeError(f"HTTP {exc.code} on {path}: {raw[:300]}") from exc
+        import requests
+
+        return isinstance(
+            exc,
+            (
+                requests.exceptions.SSLError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                requests.exceptions.ChunkedEncodingError,
+            ),
+        )
+    except ImportError:
+        return False
+
+
+def http_json(
+    method: str,
+    path: str,
+    headers=None,
+    body=None,
+    timeout: int = 30,
+    *,
+    attempts: int = 5,
+) -> tuple[dict, int]:
+    """EMT OpenAPI JSON call with retries — Fabric urllib often hits SSL EOF."""
+    try:
+        import requests
+    except ImportError as exc:
+        raise RuntimeError(
+            "requests is required for EMT HTTP; add it to env_emt_pipeline"
+        ) from exc
+
+    url = f"{BASE_URL}{path}"
+    hdrs = {**HTTP_HEADERS_BASE, **(headers or {})}
+    last_err: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = requests.request(
+                method=method.upper(),
+                url=url,
+                headers=hdrs,
+                data=body,
+                timeout=timeout,
+                allow_redirects=True,
+            )
+            raw = resp.text
+            if resp.status_code == 401:
+                raise TokenExpiredError(f"HTTP 401 on {path}: {raw[:200]}")
+            if resp.status_code in {408, 425, 429, 500, 502, 503, 504}:
+                raise RuntimeError(f"HTTP {resp.status_code} on {path}: {raw[:300]}")
+            if resp.status_code >= 400:
+                raise RuntimeError(f"HTTP {resp.status_code} on {path}: {raw[:300]}")
+            try:
+                payload = resp.json()
+            except ValueError as exc:
+                raise RuntimeError(f"Non-JSON on {path}: {raw[:300]}") from exc
+            if not isinstance(payload, dict):
+                raise RuntimeError(f"Unexpected JSON type on {path}: {type(payload)}")
+            return payload, int(resp.status_code)
+        except TokenExpiredError:
+            raise
+        except RuntimeError as exc:
+            last_err = exc
+            # Non-retryable client errors (except the transient set raised above)
+            m = re.match(r"HTTP (\d+)", str(exc))
+            if m:
+                code = int(m.group(1))
+                if code >= 400 and code not in {408, 425, 429, 500, 502, 503, 504}:
+                    raise
+            if attempt < attempts:
+                sleep_s = min(2**attempt, 20)
+                print(
+                    f"HTTP {method.upper()} {path} failed "
+                    f"(attempt {attempt}/{attempts}): {exc!r}; retry in {sleep_s}s"
+                )
+                time.sleep(sleep_s)
+                continue
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            if attempt < attempts and _is_transient_http_error(exc):
+                sleep_s = min(2**attempt, 20)
+                print(
+                    f"HTTP {method.upper()} {path} failed "
+                    f"(attempt {attempt}/{attempts}): {exc!r}; retry in {sleep_s}s"
+                )
+                time.sleep(sleep_s)
+                continue
+            if attempt < attempts:
+                sleep_s = min(2**attempt, 20)
+                print(
+                    f"HTTP {method.upper()} {path} failed "
+                    f"(attempt {attempt}/{attempts}): {exc!r}; retry in {sleep_s}s"
+                )
+                time.sleep(sleep_s)
+                continue
+            break
+
+    raise RuntimeError(
+        f"HTTP {method.upper()} {path} failed after {attempts} attempts: {last_err}"
+    ) from last_err
 
 
 def login_with_ttl(client_id: str, pass_key: str) -> tuple[str, float]:
