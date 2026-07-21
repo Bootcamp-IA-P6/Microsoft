@@ -20,12 +20,17 @@
 # META   }
 # META }
 
+# MARKDOWN ********************
+
+# # Direct ingest fallback (thin v0.1.1)
+#
+# Calls `emt_pipeline.direct_ingest.run_direct_ingest`.
+
 # CELL ********************
 
-# MAGIC %md
-# MAGIC # Direct ingest arrives (fallback)
-# MAGIC
-# MAGIC Thin wrapper → `emt_pipeline.direct_ingest`.
+from emt_pipeline import __version__ as _emt_ver
+print(f"=== emt_pipeline thin wrapper v{_emt_ver} ===")
+print("If you still see CREATE TABLE / long SQL bodies, discard workspace notebook changes and Update from Git.")
 
 # METADATA ********************
 
@@ -33,6 +38,7 @@
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
 
 # CELL ********************
 
@@ -48,6 +54,7 @@ token_skew_sec = 90  # @param {type:"number"}
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
 
 # CELL ********************
 
@@ -68,4 +75,3 @@ run_direct_ingest(
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
-

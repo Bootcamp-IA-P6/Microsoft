@@ -20,12 +20,17 @@
 # META   }
 # META }
 
+# MARKDOWN ********************
+
+# # Create tables (thin v0.1.1)
+#
+# Calls `emt_pipeline.tables.recreate_tables` — DROP legacy + recreate contract tables.
+
 # CELL ********************
 
-# MAGIC %md
-# MAGIC # Create tables
-# MAGIC
-# MAGIC Thin wrapper → `emt_pipeline.tables` (Environment: `env_emt_pipeline`).
+from emt_pipeline import __version__ as _emt_ver
+print(f"=== emt_pipeline thin wrapper v{_emt_ver} ===")
+print("If you still see CREATE TABLE / long SQL bodies, discard workspace notebook changes and Update from Git.")
 
 # METADATA ********************
 
@@ -33,6 +38,7 @@
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
 
 # CELL ********************
 
@@ -46,4 +52,3 @@ recreate_tables(spark)
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
-

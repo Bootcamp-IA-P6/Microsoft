@@ -20,12 +20,17 @@
 # META   }
 # META }
 
+# MARKDOWN ********************
+
+# # Transform bronze→silver→gold (thin v0.1.1)
+#
+# Calls `emt_pipeline.transform.run_transform`.
+
 # CELL ********************
 
-# MAGIC %md
-# MAGIC # Transform bronze → silver → gold
-# MAGIC
-# MAGIC Thin wrapper → `emt_pipeline.transform`.
+from emt_pipeline import __version__ as _emt_ver
+print(f"=== emt_pipeline thin wrapper v{_emt_ver} ===")
+print("If you still see CREATE TABLE / long SQL bodies, discard workspace notebook changes and Update from Git.")
 
 # METADATA ********************
 
@@ -33,6 +38,7 @@
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
 
 # CELL ********************
 
@@ -47,6 +53,7 @@ freq_min_samples = 20  # @param {type:"number"}
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
 
 # CELL ********************
 
@@ -66,4 +73,3 @@ run_transform(
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
-
