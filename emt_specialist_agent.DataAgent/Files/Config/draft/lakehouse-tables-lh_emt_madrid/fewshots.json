@@ -1,0 +1,30 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/dataAgent/definition/fewShots/1.0.0/schema.json",
+  "fewShots": [
+    {
+      "id": "fa8e9d8d-21c4-44cc-b10b-7a0d3cc7c083",
+      "question": "¿Cuánto tarda la línea M1 en llegar a la parada 4035?",
+      "query": "SELECT stop_name, line_label, direction_text,\r\n       eta_seconds_1 / 60.0 AS minutos_proximo_bus,\r\n       has_upcoming_bus, is_stale, origin_stop_notice\r\nFROM gold_emt_stop_line\r\nWHERE stop_id = '4035' AND line_label = 'M1';"
+    },
+    {
+      "id": "48df4047-0d30-4912-96bc-a1b4a89ebb6e",
+      "question": "¿Qué autobuses llegan ahora a la parada 4035?",
+      "query": "SELECT line_label, destination,\r\n       eta_seconds_1 / 60.0 AS minutos_bus_1,\r\n       eta_seconds_2 / 60.0 AS minutos_bus_2,\r\n       has_upcoming_bus, origin_stop_notice\r\nFROM gold_emt_stop_line\r\nWHERE stop_id = '4035';"
+    },
+    {
+      "id": "1fcaee63-67ee-4150-a7e8-d189bbb2f3d5",
+      "question": "¿Cada cuánto pasa la línea 27 entre semana?",
+      "query": "SELECT DISTINCT line_label,\r\n       freq_observed_weekday_min,\r\n       freq_sample_size_weekday\r\nFROM gold_emt_stop_line\r\nWHERE line_label = '27';"
+    },
+    {
+      "id": "b6b15a69-9221-405a-bf4d-bd9ee3aacad6",
+      "question": "¿Hay incidencias activas en la línea M1?",
+      "query": "SELECT DISTINCT line_label, alert_active, alert_header,\r\n       alert_cause, alert_effect, alert_url\r\nFROM gold_emt_stop_line\r\nWHERE line_label = 'M1';"
+    },
+    {
+      "id": "09d1535c-650d-446f-9b99-2ee08d12376c",
+      "question": "¿Por qué se retrasó la línea 27 hoy?",
+      "query": "-- No existe columna de causa de retraso en gold_emt_stop_line.\r\n-- Esta consulta intencionalmente no devuelve ese dato: el agente debe reconocer que la tabla no lo contiene y responder \"no lo sé\".\r\n"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Eventstream",
+    "displayName": "es_emt_madrid"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "e2469484-7d1c-8db3-40ba-272194115eba"
+  }
+}

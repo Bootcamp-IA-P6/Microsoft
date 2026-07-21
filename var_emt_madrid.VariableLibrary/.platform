@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "VariableLibrary",
+    "displayName": "var_emt_madrid"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "bf9f3101-4d4f-8735-47cd-c8f0a7dc39cb"
+  }
+}

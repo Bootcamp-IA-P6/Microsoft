@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_poll_emt_eventstream"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "49b9bac7-7e53-b5e3-4dea-e15fa004e71c"
+  }
+}

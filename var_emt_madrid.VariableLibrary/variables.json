@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/variableLibrary/definition/variables/1.0.0/schema.json",
+  "variables": [
+    {
+      "name": "EMT_CLIENT_ID",
+      "note": "",
+      "type": "String",
+      "value": "971ab2e9-0150-48b0-9e91-98e2682d0780"
+    },
+    {
+      "name": "EMT_MADRID_PASS_KEY",
+      "note": "",
+      "type": "String",
+      "value": "8085614C75460BE54ED2F7CE7EDD1495953A825AE3DA009DD51E992BBFC80D8E8FC92D8AA94B239599D24E20D91164DCB37DFCED96CE891C71F90CD9F0C1A084"
+    },
+    {
+      "name": "EVENTSTREAM_CONNECTION_STRING",
+      "note": "",
+      "type": "String",
+      "value": "Endpoint=sb://esehescfqhqs3dkof16glv5.servicebus.windows.net/;SharedAccessKeyName=key_6eacb70e-00e7-4b68-a27c-e85e37dcb878;SharedAccessKey=Hs0g3KMPHuKV4ylyQXUiQQW/RVSLnWlRq+AEhJjsX+U=;EntityPath=esehescfqhqs3dkof16glv5_eh"
+    }
+  ]
+}

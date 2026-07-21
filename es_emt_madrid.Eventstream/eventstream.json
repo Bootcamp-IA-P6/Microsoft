@@ -1,0 +1,124 @@
+{
+  "sources": [
+    {
+      "id": "6eacb70e-00e7-4b68-a27c-e85e37dcb878",
+      "name": "emt_arrives_push",
+      "type": "CustomEndpoint",
+      "properties": {}
+    }
+  ],
+  "destinations": [
+    {
+      "id": "d49fe72d-09b8-4e88-94fd-9ed3f507e8ca",
+      "name": "Lakehouse",
+      "type": "Lakehouse",
+      "properties": {
+        "workspaceId": "00000000-0000-0000-0000-000000000000",
+        "itemId": "e3d34640-5aac-b6fc-46c0-9aaf6fc8888d",
+        "schema": "",
+        "deltaTable": "bronze_emt_raw",
+        "inputSerialization": {
+          "type": "Json",
+          "properties": {
+            "encoding": "UTF8"
+          }
+        }
+      },
+      "inputNodes": [
+        {
+          "name": "es_emt_madrid-stream"
+        }
+      ],
+      "inputSchemas": [
+        {
+          "name": "es_emt_madrid-stream",
+          "schema": {
+            "columns": [
+              {
+                "name": "ingest_id",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "ingested_at",
+                "type": "DateTime",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "source_system",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "resource_kind",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "resource_key",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "http_status",
+                "type": "BigInt",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "api_code",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "api_description",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "payload",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "content_sha256",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              },
+              {
+                "name": "timezone_note",
+                "type": "Nvarchar(max)",
+                "fields": null,
+                "items": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "streams": [
+    {
+      "id": "9b644219-86c9-4a3c-8fa7-dc846fbfa62e",
+      "name": "es_emt_madrid-stream",
+      "type": "DefaultStream",
+      "properties": {},
+      "inputNodes": [
+        {
+          "name": "emt_arrives_push"
+        }
+      ]
+    }
+  ],
+  "operators": [],
+  "compatibilityLevel": "1.1"
+}

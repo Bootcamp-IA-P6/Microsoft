@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "DataAgent",
+    "displayName": "emt_specialist_agent"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "27435405-ec5b-a306-4a24-f10a52c51205"
+  }
+}
