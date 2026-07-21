@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emt-pipeline"
+version = "0.1.0"
+description = "Reusable EMT Madrid medallion pipeline for Microsoft Fabric"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+eventhub = ["azure-eventhub>=5.11.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["emt_pipeline*"]

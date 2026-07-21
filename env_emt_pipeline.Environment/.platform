@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Environment",
+    "displayName": "env_emt_pipeline",
+    "description": "Shared EMT pipeline package (emt_pipeline wheel) + azure-eventhub"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "fe076382-f415-4fda-b39c-e8019c36ad8a"
+  }
+}

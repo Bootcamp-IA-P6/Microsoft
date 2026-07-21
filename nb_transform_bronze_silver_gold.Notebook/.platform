@@ -2,7 +2,8 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
   "metadata": {
     "type": "Notebook",
-    "displayName": "nb_transform_bronze_silver_gold"
+    "displayName": "nb_transform_bronze_silver_gold",
+    "description": "Transform bronze \u2192 silver \u2192 gold"
   },
   "config": {
     "version": "2.0",

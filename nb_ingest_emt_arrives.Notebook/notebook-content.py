@@ -27,9 +27,9 @@
 # CELL ********************
 
 # MAGIC %md
-# MAGIC # Transform bronze → silver → gold
+# MAGIC # Direct ingest arrives (fallback)
 # MAGIC
-# MAGIC Thin wrapper → `emt_pipeline.transform`.
+# MAGIC Thin wrapper → `emt_pipeline.direct_ingest`.
 
 # METADATA ********************
 
@@ -40,10 +40,11 @@
 
 # CELL ********************
 
-stale_after_sec = 180  # @param {type:"number"}
+stop_ids = ""  # @param {type:"string"}
+variable_library_name = "var_emt_madrid"  # @param {type:"string"}
 bronze_table = "bronze_emt_raw"  # @param {type:"string"}
-incremental = True  # @param {type:"boolean"}
-freq_min_samples = 20  # @param {type:"number"}
+max_retries_per_stop = 2  # @param {type:"number"}
+token_skew_sec = 90  # @param {type:"number"}
 
 # METADATA ********************
 
@@ -54,14 +55,15 @@ freq_min_samples = 20  # @param {type:"number"}
 
 # CELL ********************
 
-from emt_pipeline.transform import run_transform
+from emt_pipeline.direct_ingest import run_direct_ingest
 
-run_transform(
+run_direct_ingest(
     spark,
-    stale_after_sec=stale_after_sec,
+    stop_ids=stop_ids,
+    variable_library_name=variable_library_name,
     bronze_table=bronze_table,
-    incremental=incremental,
-    freq_min_samples=freq_min_samples,
+    max_retries_per_stop=max_retries_per_stop,
+    token_skew_sec=token_skew_sec,
 )
 
 # METADATA ********************
