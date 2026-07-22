@@ -1,0 +1,78 @@
+// services/naviAgent.js
+//
+// ⚠️ ESTE ES EL ÚNICO ARCHIVO QUE DEBE CAMBIAR cuando el Data Agent
+// esté publicado como servidor MCP. Ningún componente de UI importa
+// de mocks/ directamente — todos pasan por askNaviAgent().
+//
+// Contrato de retorno (no cambiar la forma, o hay que tocar los componentes):
+//   { answerText: string, rows: GoldRow[] }
+// donde GoldRow tiene la forma de mocks/mockGoldRows.js (= gold_emt_stop_line).
+
+import { mockGoldRows } from '../mocks/mockGoldRows';
+
+const SIMULATED_LATENCY_MS = 600;
+
+export async function askNaviAgent(userQuestion) {
+  // ============================================================
+  // TODO (cuando el Data Agent esté publicado):
+  //
+  // Reemplazar todo el cuerpo de esta función por una llamada real
+  // al servidor MCP del Data Agent. Algo así:
+  //
+  //   const res = await fetch(import.meta.env.VITE_NAVI_MCP_URL, {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //       Authorization: `Bearer ${fabricToken}`, // token de Fabric del usuario
+  //     },
+  //     body: JSON.stringify({
+  //       tool: 'navi_data_agent',
+  //       input: { question: userQuestion },
+  //     }),
+  //   });
+  //   const data = await res.json();
+  //   return {
+  //     answerText: data.answer_text,
+  //     rows: data.rows, // el Data Agent debe devolver filas con forma gold_emt_stop_line
+  //   };
+  //
+  // El VITE_NAVI_MCP_URL sale de la descripción del tool MCP publicado
+  // en Fabric (ver §"Data agent as Model Context Protocol server").
+  // ============================================================
+
+  await new Promise((resolve) => setTimeout(resolve, SIMULATED_LATENCY_MS));
+
+  const q = userQuestion.toLowerCase();
+
+  // Router de mock MUY simple, solo para poder probar los 4 estados
+  // visuales desde el input de chat sin esperar al agente real.
+  if (q.includes('incidencia') || q.includes('14')) {
+    const row = mockGoldRows.find((r) => r.line_id === '014');
+    return {
+      answerText: `La línea ${row.line_label} tiene una incidencia activa: ${row.alert_header}.`,
+      rows: [row],
+    };
+  }
+
+  if (q.includes('51') || q.includes('aluche')) {
+    const row = mockGoldRows.find((r) => r.line_id === '051');
+    return {
+      answerText: `El dato de la línea ${row.line_label} podría estar desactualizado, pero el último bus visto llega en unos minutos.`,
+      rows: [row],
+    };
+  }
+
+  if (q.includes('3') && !q.includes('27') && !q.includes('51')) {
+    const row = mockGoldRows.find((r) => r.line_id === '003');
+    return {
+      answerText: `No veo ningún autobús próximo de la línea ${row.line_label} en esta parada ahora mismo.`,
+      rows: [row],
+    };
+  }
+
+  // Respuesta por defecto: todas las líneas que pasan por Puerta del Sol.
+  return {
+    answerText: 'Estas son las líneas que pasan cerca de tu ubicación:',
+    rows: mockGoldRows,
+  };
+}
