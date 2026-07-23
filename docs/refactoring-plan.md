@@ -129,9 +129,25 @@ Separate business logic into reusable Python modules.
 Notebooks become thin orchestrators only, e.g.:
 
 ```python
+import sys
+_FILES_PY = "/lakehouse/default/Files/python"
+if _FILES_PY not in sys.path:
+    sys.path.insert(0, _FILES_PY)
+
 from pipeline.orchestrator.run_arrives import run_arrives
 from pipeline.orchestrator.run_alerts import run_alerts
 ```
+
+**Deploy:** upload repo `pipeline/` → Lakehouse `Files/python/pipeline/` (no Environment / whl — Instant-friendly).  
+**Schema:** unchanged (v4.3.1 tables).
+
+## Status
+
+- [x] `pipeline/` package under repo root
+- [x] Thin paste notebooks (`nb_create_tables`, `nb_bootstrap_gtfs_silver`, `nb_poll_and_transform`, `nb_alerts_silver_gold`)
+- [x] Arrives / alerts / bootstrap / create orchestrators
+- [x] Freq remains ADR-038 (`pipeline.aggregate.frequency`)
+- [ ] Fabric: upload `Files/python/pipeline/` + re-paste thin notebooks + smoke
 
 ## Proposed Structure
 
@@ -140,32 +156,32 @@ pipeline/
     config/
         settings.py
         constants.py          # table names: bronze_emt_raw, silver_arrives, …
-
+    common/                   # datetime, keys, delta_retry, http_retry, …
     ingestion/
         emt_client.py         # S1 REST
         gtfs_rt_client.py     # S2 servicealerts
+        gtfs_static.py
         bronze_writer.py
-
+        arrives_ingest.py
+        alerts_ingest.py
     transform/
-        arrives_normalize.py  # bronze arrives → silver_arrives rows
-        alerts_normalize.py   # bronze servicealerts → silver_alerts rows
-        enrich.py             # catalogue / direction mapping
-
+        arrives_normalize.py  # (logic lives in aggregate/arrives_transform for now)
+        alerts_normalize.py
+        enrich.py
     aggregate/
-        latest.py             # ETA slots from silver_arrives
-        frequency.py          # from silver_arrives history
-        alerts_project.py     # silver_alerts → gold alert_* (active@now)
-        gold_arrives_merge.py # ETA/freq/stale only
-        gold_alerts_merge.py  # alert_* only
-
+        frequency.py          # ADR-038
+        arrives_transform.py  # silver + gold arrives MERGE
+        alerts_project.py
+        alerts_transform.py   # silver_alerts + gold alert_* MERGE
     validation/
         schema.py
         quality.py
-
     orchestrator/
         run_arrives.py
         run_alerts.py
         run_bootstrap.py
+        run_create_tables.py
+        bootstrap_impl.py
 ```
 
 ## Responsibilities
@@ -176,15 +192,16 @@ pipeline/
 | transform | Parse, normalize, map to `silver_arrives` / `silver_alerts` |
 | aggregate | Freq, latest ETA, alert projection, **separate** Gold MERGEs |
 | validation | Schema / quality |
-| orchestrator | Order only — no business logic |
+| orchestrator | Order only — thin notebooks call these |
 
 Do **not** merge arrives + alerts into one Gold overwrite that resets the other domain’s columns.
 
 ## Deliverables
 
-- Thin notebooks (arrives / alerts / bootstrap)
-- Reusable modules
-- Better testing and Git history
+- [x] Thin notebooks (arrives / alerts / bootstrap / create)
+- [x] Reusable modules under `pipeline/`
+- [x] Better testing and Git history surface (modules vs mega-notebooks)
+- [ ] Fabric smoke after Files upload
 
 ---
 
