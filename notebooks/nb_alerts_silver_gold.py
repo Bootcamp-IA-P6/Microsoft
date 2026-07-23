@@ -8,7 +8,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Alerts → bronze → silver_alerts → gold `alert_*` (contract v4.3)
+# MAGIC # Alerts → bronze → silver_alerts → gold `alert_*` (contract v4.3 · Phase 1)
 # MAGIC Does **not** update ETA / freq / stale columns.
 
 # COMMAND ----------
@@ -17,6 +17,7 @@ bronze_table = "bronze_emt_raw"  # @param {type:"string"}
 silver_alerts_table = "silver_alerts"  # @param {type:"string"}
 gold_table = "gold_emt_stop_line"  # @param {type:"string"}
 servicealerts_url = "https://openapi.emtmadrid.es/v1/bus/servicealerts/proto"  # @param {type:"string"}
+verbose_display = False  # @param {type:"boolean"}
 
 # COMMAND ----------
 
@@ -50,35 +51,6 @@ def utc_now_iso_z() -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
-def _agent_log(hypothesis_id: str, location: str, message: str, data=None) -> None:
-    # #region agent log
-    payload = {
-        "sessionId": "8007a7",
-        "runId": "post-fix",
-        "hypothesisId": hypothesis_id,
-        "location": location,
-        "message": message,
-        "data": data or {},
-        "timestamp": int(time.time() * 1000),
-    }
-    line = json.dumps(payload, ensure_ascii=False)
-    print(f"AGENT_DEBUG {line}")
-    for path in (
-        "/Users/miraekang/proyectos/microsoft/.cursor/debug-8007a7.log",
-        "/lakehouse/default/Files/.cursor/debug-8007a7.log",
-    ):
-        try:
-            import os
-
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-            break
-        except Exception:  # noqa: BLE001
-            continue
-    # #endregion
-
-
 def delta_sql_retry(spark, sql: str, *, label: str, attempts: int = 6) -> None:
     """Retry Delta MERGE/DELETE on ConcurrentAppendException (arrives+alerts share gold)."""
     last: BaseException | None = None
@@ -87,14 +59,6 @@ def delta_sql_retry(spark, sql: str, *, label: str, attempts: int = 6) -> None:
             spark.sql(sql)
             if attempt > 1:
                 print(f"{label}: succeeded on attempt {attempt}/{attempts}")
-                # #region agent log
-                _agent_log(
-                    "E",
-                    "delta_sql_retry",
-                    "retry succeeded",
-                    {"label": label, "attempt": attempt},
-                )
-                # #endregion
             return
         except Exception as exc:  # noqa: BLE001
             last = exc
@@ -105,19 +69,6 @@ def delta_sql_retry(spark, sql: str, *, label: str, attempts: int = 6) -> None:
                 or "DELTA_CONCURRENT_APPEND" in msg
                 or "ConcurrentTransactionException" in msg
             )
-            # #region agent log
-            _agent_log(
-                "E",
-                "delta_sql_retry",
-                "delta write conflict" if concurrent else "delta write error",
-                {
-                    "label": label,
-                    "attempt": attempt,
-                    "concurrent": concurrent,
-                    "err": type(exc).__name__,
-                },
-            )
-            # #endregion
             if not concurrent or attempt >= attempts:
                 raise
             sleep_s = min(2**attempt, 30)
@@ -192,21 +143,9 @@ def http_bytes(url: str, *, timeout: int = 60, attempts: int = 5) -> tuple[bytes
     except ImportError:
         use_requests = False
 
-    # #region agent log
-    _agent_log("C", "http_bytes:start", "http client selected", {"use_requests": use_requests})
-    # #endregion
-
     for attempt in range(1, attempts + 1):
         try:
             raw, status = _via_requests() if use_requests else _via_urllib()
-            # #region agent log
-            _agent_log(
-                "C",
-                "http_bytes:ok",
-                "fetch ok",
-                {"status": status, "bytes": len(raw), "attempt": attempt},
-            )
-            # #endregion
             return raw, status
         except Exception as exc:  # noqa: BLE001
             last_err = exc
@@ -471,18 +410,6 @@ def decode_feed_to_dict(raw: bytes) -> dict:
         return b
 
     result = _pb_parse(raw, 0, len(raw), {1: h_header, 2: h_ent}, out=out)[0]
-    # #region agent log
-    _agent_log(
-        "B",
-        "decode_feed_to_dict",
-        "pure protobuf decode ok",
-        {
-            "bytes": len(raw),
-            "entities": len(result.get("entity") or []),
-            "header_ts": (result.get("header") or {}).get("timestamp"),
-        },
-    )
-    # #endregion
     return result
 
 
@@ -624,13 +551,16 @@ payload = run_alerts_ingest(spark, url=servicealerts_url, bronze_table=bronze_ta
 
 
 def known_line_ids(spark) -> set[str]:
+    """One small collect of distinct line_ids from gold (preferred) or silver_arrives."""
     ids: set[str] = set()
-    if spark.catalog.tableExists("silver_arrives"):
-        for r in spark.table("silver_arrives").select("line_id").distinct().collect():
-            if r["line_id"]:
-                ids.add(str(r["line_id"]).strip())
     if spark.catalog.tableExists(gold_table):
         for r in spark.table(gold_table).select("line_id").distinct().collect():
+            if r["line_id"]:
+                ids.add(str(r["line_id"]).strip())
+        if ids:
+            return ids
+    if spark.catalog.tableExists("silver_arrives"):
+        for r in spark.table("silver_arrives").select("line_id").distinct().collect():
             if r["line_id"]:
                 ids.add(str(r["line_id"]).strip())
     return ids
@@ -790,7 +720,7 @@ def run_alerts_transform(spark, payload: dict) -> None:
         spark.createDataFrame(silver_rows, schema=SILVER_ALERTS_SCHEMA).write.format(
             "delta"
         ).mode("append").saveAsTable(silver_alerts_table)
-    print(f"{silver_alerts_table} rows={spark.table(silver_alerts_table).count()} snapshot_at={snap}")
+    print(f"{silver_alerts_table} rows written={len(silver_rows)} snapshot_at={snap}")
 
     # now as Europe/Madrid instant → naive UTC for comparing stored timestamps
     now_naive = datetime.now(MADRID).astimezone(UTC).replace(tzinfo=None, microsecond=0)
@@ -818,41 +748,32 @@ def run_alerts_transform(spark, payload: dict) -> None:
         label="gold alerts MERGE",
     )
     print(f"MERGE {gold_table} alert_* by line_id done")
-    display(
-        spark.table(gold_table)
-        .filter("alert_active = true")
-        .select(
-            "stop_id",
-            "line_id",
-            "direction_id",
-            "alert_active",
-            "alert_header",
-            "alert_cause",
-            "alert_effect",
-        )
-        .orderBy("line_id", "stop_id")
-        .limit(40)
-    )
-    print("=== SUMMARY (contract v4.3 alerts) ===")
-    print(f"bronze={spark.table(bronze_table).count()}")
-    print(f"silver_alerts={spark.table(silver_alerts_table).count()}")
-    print(
-        f"gold alert_active=true: "
-        f"{spark.table(gold_table).filter('alert_active = true').count()}"
-    )
-    # #region agent log
-    _agent_log(
-        "B",
-        "run_alerts_transform:done",
-        "alerts transform finished",
-        {
-            "silver_alerts": spark.table(silver_alerts_table).count(),
-            "gold_alert_active": spark.table(gold_table)
+    if verbose_display:
+        display(
+            spark.table(gold_table)
             .filter("alert_active = true")
-            .count(),
-        },
-    )
-    # #endregion
+            .select(
+                "stop_id",
+                "line_id",
+                "direction_id",
+                "alert_active",
+                "alert_header",
+                "alert_cause",
+                "alert_effect",
+            )
+            .orderBy("line_id", "stop_id")
+            .limit(40)
+        )
+        print("=== SUMMARY (contract v4.3 alerts) ===")
+        print(f"bronze={spark.table(bronze_table).count()}")
+        print(f"silver_alerts={spark.table(silver_alerts_table).count()}")
+        print(
+            f"gold alert_active=true: "
+            f"{spark.table(gold_table).filter('alert_active = true').count()}"
+        )
+    else:
+        print("=== SUMMARY (contract v4.3 alerts · phase1) ===")
+        print(f"stage_lines={len(stage)} verbose_display=False")
 
 
 run_alerts_transform(spark, payload)

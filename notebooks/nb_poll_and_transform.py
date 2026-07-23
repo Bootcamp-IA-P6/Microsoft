@@ -8,8 +8,9 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Poll arrives → bronze → silver_arrives → gold ETA/freq (contract v4.3)
+# MAGIC # Poll arrives → bronze → silver_arrives → gold ETA/freq (contract v4.3 · Phase 1)
 # MAGIC Does **not** update Gold `alert_*` — that is `nb_alerts_silver_gold`.
+# MAGIC Phase 1: fewer collect()/count jobs; gold from latest poll only; freq in Spark.
 
 # COMMAND ----------
 
@@ -21,6 +22,7 @@ token_skew_sec = 90  # @param {type:"number"}
 stale_after_sec = 900  # @param {type:"number"}
 incremental = True  # @param {type:"boolean"}
 freq_min_samples = 20  # @param {type:"number"}
+verbose_display = False  # @param {type:"boolean"}
 
 # COMMAND ----------
 
@@ -468,7 +470,9 @@ def run_direct_ingest(
     bronze_table: str,
     max_retries_per_stop: int,
     token_skew_sec: int,
+    verbose_display: bool = False,
 ) -> None:
+    t_http0 = time.perf_counter()
     client_id, pass_key = load_emt_credentials(variable_library_name)
     parsed = resolve_stop_ids(spark, stop_ids)
     session = EmtTokenSession(client_id, pass_key, token_skew_sec)
@@ -502,16 +506,20 @@ def run_direct_ingest(
         print(f"  stop {sid}: ok")
 
     print(f"Round {time.time() - t0:.1f}s success={len(rows)} fail={len(failures)}")
+    print(f"[phase1 timing] HTTP arrives poll: {time.perf_counter() - t_http0:.2f}s")
     if not rows:
         raise RuntimeError("No rows\n" + "\n".join(failures))
 
+    t_w0 = time.perf_counter()
     spark.createDataFrame(rows, schema=BRONZE_SCHEMA).write.format("delta").mode(
         "append"
     ).saveAsTable(bronze_table)
     print(f"Appended {len(rows)} → {bronze_table}")
+    print(f"[phase1 timing] bronze append: {time.perf_counter() - t_w0:.2f}s")
     for f in failures:
         print(f"  fail: {f}")
-    display(spark.table(bronze_table).orderBy("ingested_at", ascending=False).limit(10))
+    if verbose_display:
+        display(spark.table(bronze_table).orderBy("ingested_at", ascending=False).limit(10))
 
 
 
@@ -522,6 +530,7 @@ run_direct_ingest(
     bronze_table=bronze_table,
     max_retries_per_stop=max_retries_per_stop,
     token_skew_sec=token_skew_sec,
+    verbose_display=bool(verbose_display),
 )
 
 # COMMAND ----------
@@ -533,6 +542,7 @@ run_direct_ingest(
 
 import json
 import statistics
+import time
 from datetime import datetime
 
 from pyspark.sql import Window
@@ -660,7 +670,87 @@ def median_gaps_minutes(timestamps: list[datetime]) -> tuple[float | None, int]:
     return float(statistics.median(gaps)), n
 
 
-def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental: bool, freq_min_samples: int) -> None:
+def _phase1_timer():
+    t0 = time.perf_counter()
+
+    def lap(label: str) -> None:
+        print(f"[phase1 timing] {label}: {time.perf_counter() - t0:.2f}s since start")
+
+    return lap
+
+
+def compute_freq_by_line_spark(spark, *, freq_min: int) -> dict[str, dict]:
+    """Median successive gaps per line×window.
+
+    Gaps computed in Spark (no full-row collect); exact median in Python on gap values only
+    (same as Phase 0 statistics.median — not percentile_approx).
+    """
+    polls = (
+        spark.table("silver_arrives")
+        .filter("bus_id IS NOT NULL AND map_ok = true AND day_type IN ('LA','SA','FE')")
+        .select(
+            "line_id",
+            "bus_id",
+            "datetime_polling",
+            F.when(F.col("day_type") == "LA", F.lit("weekday"))
+            .otherwise(F.lit("weekend"))
+            .alias("window"),
+        )
+        .dropDuplicates(["line_id", "bus_id", "datetime_polling", "window"])
+    )
+    ts = polls.select("line_id", "window", "datetime_polling").dropDuplicates()
+    w = Window.partitionBy("line_id", "window").orderBy("datetime_polling")
+    gaps = (
+        ts.withColumn("prev", F.lag("datetime_polling").over(w))
+        .withColumn(
+            "gap_min",
+            (F.unix_timestamp("datetime_polling") - F.unix_timestamp("prev")) / 60.0,
+        )
+        .filter("prev IS NOT NULL AND gap_min > 0")
+        .select("line_id", "window", "gap_min")
+    )
+    n_by = {
+        (r["line_id"], r["window"]): int(r["n"])
+        for r in ts.groupBy("line_id", "window").agg(F.count("*").alias("n")).collect()
+    }
+    gaps_by: dict[tuple[str, str], list[float]] = {}
+    for r in gaps.collect():
+        gaps_by.setdefault((r["line_id"], r["window"]), []).append(float(r["gap_min"]))
+
+    freq_by_line: dict[str, dict] = {}
+    keys = set(n_by) | set(gaps_by)
+    for lid, window in keys:
+        n = n_by.get((lid, window), 0)
+        gap_list = gaps_by.get((lid, window), [])
+        med = float(statistics.median(gap_list)) if gap_list else None
+        slot = freq_by_line.setdefault(
+            lid,
+            {
+                "freq_observed_weekday_min": None,
+                "freq_observed_weekend_min": None,
+                "freq_sample_size_weekday": 0,
+                "freq_sample_size_weekend": 0,
+            },
+        )
+        if window == "weekday":
+            slot["freq_sample_size_weekday"] = n
+            slot["freq_observed_weekday_min"] = med if n >= freq_min else None
+        else:
+            slot["freq_sample_size_weekend"] = n
+            slot["freq_observed_weekend_min"] = med if n >= freq_min else None
+    return freq_by_line
+
+
+def run_transform(
+    spark,
+    *,
+    stale_after_sec: int,
+    bronze_table: str,
+    incremental: bool,
+    freq_min_samples: int,
+    verbose_display: bool = False,
+) -> None:
+    lap = _phase1_timer()
     stale_after_sec = int(stale_after_sec)
     freq_min = int(freq_min_samples)
 
@@ -669,13 +759,17 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
 
     cat_rows = latest_catalog_rows(spark)
     cat_by_grain = {(r["stop_id"], r["line_id"], int(r["direction_id"])): r for r in cat_rows}
+    grains_by_stop: dict[str, list] = {}
     label_at_stop: dict[tuple[str, str], str] = {}
     line_names: dict[str, tuple[str | None, str | None]] = {}
     for r in cat_rows:
-        label_at_stop[(r["stop_id"], r["line_label"])] = r["line_id"]
-        line_names[r["line_id"]] = (r["name_a"], r["name_b"])
+        sid, lid, did = r["stop_id"], r["line_id"], int(r["direction_id"])
+        grains_by_stop.setdefault(sid, []).append(((sid, lid, did), r))
+        label_at_stop[(sid, r["line_label"])] = lid
+        line_names[lid] = (r["name_a"], r["name_b"])
     day_type_today = next((r["day_type"] for r in cat_rows if r["day_type"]), "LA")
     print(f"Catalogue grains={len(cat_by_grain)} day_type={day_type_today}")
+    lap("catalogue loaded")
 
     bronze = (
         spark.table(bronze_table)
@@ -683,20 +777,27 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
         .filter("resource_kind = 'arrives' AND api_code = '00'")
     )
     if incremental:
-        max_poll = (
+        cut_row = (
             spark.table("silver_arrives")
-            .filter("bus_id IS NOT NULL OR eta_seconds IS NOT NULL")
-            .agg(F.max("ingested_at"))
-            .collect()[0][0]
+            .agg(
+                F.max(
+                    F.when(
+                        F.col("bus_id").isNotNull() | F.col("eta_seconds").isNotNull(),
+                        F.col("ingested_at"),
+                    )
+                ).alias("max_poll"),
+                F.max("ingested_at").alias("max_any"),
+            )
+            .collect()[0]
         )
-        max_any = spark.table("silver_arrives").agg(F.max("ingested_at")).collect()[0][0]
-        cutoff = max_poll or max_any
+        cutoff = cut_row["max_poll"] or cut_row["max_any"]
         if cutoff is not None:
             bronze = bronze.filter(F.col("ingested_at_ts") > F.lit(cutoff))
             print(f"Incremental bronze ingested_at > {cutoff}")
 
     bronze_list = bronze.orderBy("ingested_at_ts").collect()
     print(f"Bronze arrives rows to process: {len(bronze_list)}")
+    lap("bronze collected")
 
     candidates: list[dict] = []
     quarantine: list[str] = []
@@ -754,8 +855,8 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
                 if map_ok and direction_id is not None:
                     denorm = cat_by_grain.get((sid, line_id, direction_id))
                 if denorm is None and map_ok:
-                    for (s, l, _d), row in cat_by_grain.items():
-                        if s == sid and l == line_id:
+                    for (_g, row) in grains_by_stop.get(sid, []):
+                        if _g[1] == line_id:
                             denorm = row
                             break
                 if direction_id is None:
@@ -789,9 +890,8 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
                 )
 
         if not arrives_found:
-            for (s, l, d), row in cat_by_grain.items():
-                if s != stop_key:
-                    continue
+            for (g, row) in grains_by_stop.get(stop_key, []):
+                s, l, d = g
                 candidates.append(
                     {
                         "_rk": sha_rk(s, l, d, None, dt_poll),
@@ -820,54 +920,26 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
     print(f"Candidates={len(candidates)} quarantine={len(quarantine)}")
     for q in quarantine[:30]:
         print(f"  Q: {q}")
+    lap("candidates built")
 
     inserted = 0
     if candidates:
         cand_df = spark.createDataFrame(candidates, schema=SILVER_SCHEMA).dropDuplicates(["_rk"])
         existing = spark.table("silver_arrives").select("_rk")
         new_df = cand_df.join(existing, on="_rk", how="left_anti")
-        inserted = new_df.count()
-        if inserted:
-            new_df.write.format("delta").mode("append").saveAsTable("silver_arrives")
+        # Single materialization: count then write from cache (avoid take+write double join)
+        new_df = new_df.cache()
+        try:
+            inserted = int(new_df.count())
+            if inserted:
+                new_df.write.format("delta").mode("append").saveAsTable("silver_arrives")
+        finally:
+            new_df.unpersist()
     print(f"Inserted silver poll rows: {inserted}")
-    print(f"silver_arrives total: {spark.table('silver_arrives').count()}")
+    lap("silver append")
 
-    polls = (
-        spark.table("silver_arrives")
-        .filter("bus_id IS NOT NULL AND map_ok = true")
-        .select("line_id", "bus_id", "datetime_polling", "day_type")
-        .collect()
-    )
-    seen = set()
-    by_line_window: dict[tuple[str, str], list[datetime]] = {}
-    for p in polls:
-        key = (p["line_id"], p["bus_id"], p["datetime_polling"])
-        if key in seen:
-            continue
-        seen.add(key)
-        if p["day_type"] not in ("LA", "SA", "FE"):
-            continue
-        window = "weekday" if p["day_type"] == "LA" else "weekend"
-        by_line_window.setdefault((p["line_id"], window), []).append(p["datetime_polling"])
-
-    freq_by_line: dict[str, dict] = {}
-    for (lid, window), ts_list in by_line_window.items():
-        med, n = median_gaps_minutes(ts_list)
-        slot = freq_by_line.setdefault(
-            lid,
-            {
-                "freq_observed_weekday_min": None,
-                "freq_observed_weekend_min": None,
-                "freq_sample_size_weekday": 0,
-                "freq_sample_size_weekend": 0,
-            },
-        )
-        if window == "weekday":
-            slot["freq_sample_size_weekday"] = n
-            slot["freq_observed_weekday_min"] = med if n >= freq_min else None
-        else:
-            slot["freq_sample_size_weekend"] = n
-            slot["freq_observed_weekend_min"] = med if n >= freq_min else None
+    freq_by_line = compute_freq_by_line_spark(spark, freq_min=freq_min)
+    lap("freq agg")
 
     now_utc = datetime.now(UTC).replace(tzinfo=None, microsecond=0)
     latest_polls = (
@@ -884,21 +956,30 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
         .filter("_rn = 1")
         .drop("_rn")
     )
-    poll_ts_per_grain = {
-        (r["stop_id"], r["line_id"], int(r["direction_id"])): r["datetime_polling"]
-        for r in latest_polls.collect()
-    }
-    silver_all = (
+    # Phase 1: only rows belonging to each grain's latest poll (not full history collect)
+    current = (
         spark.table("silver_arrives")
-        .filter("map_ok = true AND direction_id IS NOT NULL")
-        .collect()
+        .alias("s")
+        .join(
+            latest_polls.select(
+                "stop_id",
+                "line_id",
+                "direction_id",
+                F.col("datetime_polling").alias("_latest"),
+            ).alias("l"),
+            on=["stop_id", "line_id", "direction_id"],
+        )
+        .where(F.col("s.datetime_polling") == F.col("_latest"))
+        .select("s.*")
     )
+    current_rows = current.collect()
+    lap(f"latest silver collected n={len(current_rows)}")
+
+    poll_ts_per_grain: dict[tuple, datetime] = {}
     buses_at: dict[tuple, list] = {}
-    for r in silver_all:
+    for r in current_rows:
         g = (r["stop_id"], r["line_id"], int(r["direction_id"]))
-        ts = poll_ts_per_grain.get(g)
-        if ts is None or r["datetime_polling"] != ts:
-            continue
+        poll_ts_per_grain[g] = r["datetime_polling"]
         if r["bus_id"] is None and r["eta_seconds"] is None:
             buses_at.setdefault(g, [])
             continue
@@ -908,7 +989,6 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
     for (sid, lid, did), cat in cat_by_grain.items():
         g = (sid, lid, did)
         buses = sorted(
-            # Spark Row has no .get(); use key access
             [b for b in buses_at.get(g, []) if b["eta_seconds"] is not None],
             key=lambda b: b["eta_seconds"],
         )
@@ -965,8 +1045,6 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
     else:
         gold_df = spark.createDataFrame(gold_rows, schema=GOLD_ARRIVES_SCHEMA)
         gold_df.createOrReplaceTempView("gold_arrives_stage")
-        # MATCHED: ETA/freq/stale only — never touch alert_*
-        # NOT MATCHED: new grains get alert_* = inactive defaults
         delta_sql_retry(
             spark,
             """
@@ -1020,20 +1098,31 @@ def run_transform(spark, *, stale_after_sec: int, bronze_table: str, incremental
             label="gold arrives MERGE",
         )
         print(f"MERGE gold_emt_stop_line (arrives cols only) staged={len(gold_rows)}")
-        display(
-            spark.table("gold_emt_stop_line")
-            .orderBy("stop_id", "line_id", "direction_id")
-            .limit(40)
-        )
+        if verbose_display:
+            display(
+                spark.table("gold_emt_stop_line")
+                .orderBy("stop_id", "line_id", "direction_id")
+                .limit(40)
+            )
+    lap("gold merge")
 
-    print("=== SUMMARY (contract v4.3 arrives) ===")
+    print("=== SUMMARY (contract v4.3 arrives · phase1) ===")
     print(f"stale_after_sec={stale_after_sec} silver_inserted={inserted}")
-    print(f"bronze={spark.table(bronze_table).count()}")
-    print(f"silver_arrives={spark.table('silver_arrives').count()}")
-    print(f"gold_emt_stop_line={spark.table('gold_emt_stop_line').count()}")
-    dup = spark.table("silver_arrives").groupBy("_rk").count().filter("count > 1").count()
-    print(f"duplicate _rk={dup} (must be 0)")
-
+    if verbose_display:
+        print(f"bronze={spark.table(bronze_table).count()}")
+        print(f"silver_arrives={spark.table('silver_arrives').count()}")
+        print(f"gold_emt_stop_line={spark.table('gold_emt_stop_line').count()}")
+        dup = (
+            spark.table("silver_arrives")
+            .groupBy("_rk")
+            .count()
+            .filter("count > 1")
+            .count()
+        )
+        print(f"duplicate _rk={dup} (must be 0)")
+    else:
+        print("verbose_display=False — skipped table count jobs")
+    lap("done")
 
 
 run_transform(
@@ -1042,4 +1131,5 @@ run_transform(
     bronze_table=bronze_table,
     incremental=bool(incremental),
     freq_min_samples=int(freq_min_samples),
+    verbose_display=bool(verbose_display),
 )

@@ -90,18 +90,31 @@ Base = **Phase 0** (v4.3 tables, arrives + alerts notebooks).
 
 ## Tasks
 
-- Reduce Spark jobs
-- Remove unnecessary `collect()`
-- Reduce shuffle
-- Optimize joins / Delta writes
-- Evaluate Starter Pool / session reuse
-- Measure startup vs execution separately
-- Profile arrives and alerts notebooks independently
+- [x] Reduce Spark jobs (skip pipeline `count`/`display` unless `verbose_display`)
+- [x] Remove unnecessary `collect()` (gold = latest poll join only; no full `silver_arrives` collect)
+- [x] Freq: Spark lag for gaps + **exact** `statistics.median` on gap values (Phase 0 parity)
+- [x] Incremental cutoff = one agg instead of two
+- [x] Timing logs: `[phase1 timing] HTTP …` vs transform laps (separate wall-clock drivers)
+- [x] Fix silver append path: `cache` → `count` → `write` (no `take`+`write` double join)
+- [ ] Evaluate **Starter Pool** in Fabric UI (this is what [Instant notebooks](https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/How-does-Fabric-make-Spark-Notebooks-Instant/ba-p/5172419) actually changes — **not** notebook code)
+- [ ] Measure startup vs execution on real Pipeline runs (compare before/after paste)
+
+## Code changes (paste SoT)
+
+- `notebooks/nb_poll_and_transform.py`
+- `notebooks/nb_alerts_silver_gold.py`
+- Ops: [manual-lakehouse-ingestion.md](./manual-lakehouse-ingestion.md) § Phase 1
+
+## Notes
+
+- Instant / cold-start: enable **default Starter Pool** (avoid custom pool / Environment that forces on-demand ~minutes). Code cannot fix session spin-up.
+- End-to-end wall time is often dominated by **HTTP arrives poll**, not Spark transform — check timing lines separately.
+- Phase 1 code wins grow as `silver_arrives` history grows (latest-only gold path).
 
 ## Deliverables
 
-- Faster runs
-- Same outputs (`silver_arrives`, `silver_alerts`, `gold_emt_stop_line`)
+- Faster **transform** portion as history grows; clearer HTTP vs Spark timing
+- Same outputs (`silver_arrives`, `silver_alerts`, `gold_emt_stop_line`) incl. exact freq median
 - Zero architectural / schema changes
 
 ---

@@ -75,7 +75,24 @@ Fabric에서 **먼저** 갱신된 [`nb_create_tables.py`](../notebooks/nb_create
 
 - create / bootstrap는 스케줄에 넣지 말 것  
 - arrives 잡은 **절대** Gold `alert_*`를 덮어쓰지 않음  
-- 두 Pipeline이 같은 `gold_emt_stop_line`에 MERGE → 가끔 `ConcurrentAppendException` 가능. 노트북에 **재시도** 있음. 스케줄을 2–3분 어긋나게 하면 더 드묾. 
+- 두 Pipeline이 같은 `gold_emt_stop_line`에 MERGE → 가끔 `ConcurrentAppendException` 가능. 노트북에 **재시도** 있음. 스케줄을 2–3분 어긋나게 하면 더 드묾.
+
+---
+
+## Phase 1 (성능) — Fabric에서 할 일
+
+코드: `nb_poll_and_transform` / `nb_alerts_silver_gold` **다시 복붙**.
+
+**Instant 기동 (블로그 본문):** Workspace/Notebook이 **Starter Pool**을 쓰는지 확인.  
+커스텀 풀·Environment 라이브러리로 on-demand가 되면 기동 수 분이 정상. 코드로 Instant가 되지 않음.
+
+측정: Run log의 `[phase1 timing]`
+
+- `HTTP arrives poll` — EMT REST (종종 end-to-end 지배)
+- transform laps (`catalogue` / `silver append` / `freq` / `latest silver` / `gold merge`)
+- 콜드스타트는 세션 시작~첫 셀 전까지 (노트북 밖)
+
+디버그할 때만 `verbose_display=True`.
 
 ---
 
@@ -93,3 +110,4 @@ Fabric에서 **먼저** 갱신된 [`nb_create_tables.py`](../notebooks/nb_create
 - [ ] arrives Pipeline 1회 성공 (`alert_*` 기존 값 유지)  
 - [ ] alerts Pipeline 1회 성공 (`silver_alerts` > 0, gold `alert_active` 스모크)  
 - [ ] Agent gold 스모크 (ETA + US-07)  
+- [ ] Phase 1: poll/alerts 재복붙 + Starter Pool 확인 + timing 로그  
