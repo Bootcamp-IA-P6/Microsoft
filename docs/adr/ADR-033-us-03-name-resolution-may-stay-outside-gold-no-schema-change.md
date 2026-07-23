@@ -11,7 +11,7 @@ Coverage review marked US-03 as YES (indirect). Question: is that a blocker?
 
 ## 2. Alternatives Considered
 
-- **A — Add dedicated search table/index in medallion:** Better search; breaks 1+1+1 or bloats Gold.
+- **A — Add dedicated search table/index in medallion:** Better search; adds tables or bloats Gold (originally also broke hard 1+1+1).
 - **B — App/Agent resolves name→`stop_id` via GTFS(+enrich) or Gold `stop_name`, then query Gold:** No schema change.
 
 ## 3. Decision
@@ -25,4 +25,4 @@ Adopt **B**. POC feasible without schema change.
 
 ## 5. Amended / Superseded by
 
-- None at time of writing.
+- Table-cap wording in alt A: hard 1+1+1 later amended by [ADR-037](ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md) / [ADR-015](ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md); **US-03 decision B unchanged** (still no dedicated search table in medallion for POC).

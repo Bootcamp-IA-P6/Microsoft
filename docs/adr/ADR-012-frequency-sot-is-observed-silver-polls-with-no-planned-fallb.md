@@ -28,3 +28,4 @@ Adopt **C** (final). Planned Frequency* and GTFS frequencies are **not** SoT. No
 
 - History: User first considered PO + API fallback, then explicitly chose **observed-only / say unknown**, aligning with the user story and contract.
 - Early schema draft that used planned Frequency* is superseded.
+- Poll history table renamed `silver_emt` → `silver_arrives` ([ADR-037](ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md)); frequency SoT unchanged.

@@ -1,119 +1,124 @@
-# Fabric notebook source — docs v1.1
+# Fabric notebook — contract v4.3 CREATE / migrate 
 #
-# How to use (Fabric UI):
-#   1. Workspace → New item → Lakehouse (e.g. lh_emt_madrid)
-#   2. Workspace → New item → Notebook → name: nb_create_tables
-#   3. Attach Lakehouse as default
-#   4. Split on "# COMMAND ----------" into cells → Run All
-#
-# Contract: docs/03-schema-contract.md (MVP tables only)
+# Data-safe: does NOT drop bronze / gold / silver_arrives.
+# Migrates silver_emt → silver_arrives (copy then drop old name).
+# Guide: docs/manual-lakehouse-ingestion.md
+# Contract: docs/data-source-contract-v4.md (v4.3)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Create medallion tables (empty)
-# MAGIC MVP tables from `docs/03` v1.1. Safe to re-run (`IF NOT EXISTS`).
-# MAGIC
-# MAGIC **Does not create** postponed tables (`silver_incidents`, `gold_incident_line_current`, `gold_line_status_5m`).
+# MAGIC # Create / migrate tables (contract v4.3)
+# MAGIC `bronze_emt_raw` · `silver_arrives` · `silver_alerts` · `gold_emt_stop_line`
+# MAGIC Preserves existing data. Renames `silver_emt` → `silver_arrives` if needed.
+
+
 
 # COMMAND ----------
 
-# Bronze — docs/03 §3 (field list from PO; types chosen for Spark / silver joins)
 spark.sql(
     """
     CREATE TABLE IF NOT EXISTS bronze_emt_raw (
-      ingested_at TIMESTAMP,
-      endpoint STRING,
-      request_stop_id INT,
+      ingest_id STRING,
+      ingested_at STRING,
+      source_system STRING,
+      resource_kind STRING,
+      resource_key STRING,
+      http_status STRING,
       api_code STRING,
       api_description STRING,
-      payload_json STRING
+      payload STRING,
+      content_sha256 STRING,
+      timezone_note STRING
     ) USING DELTA
     """
 )
 
-# Silver observations — docs/03 §4
 spark.sql(
     """
-    CREATE TABLE IF NOT EXISTS silver_arrival_observations (
+    CREATE TABLE IF NOT EXISTS silver_arrives (
       _rk STRING NOT NULL,
-      stop_id INT NOT NULL,
+      stop_id STRING NOT NULL,
       line_id STRING NOT NULL,
       line_label STRING NOT NULL,
-      bus_id STRING NOT NULL,
-      destination STRING NOT NULL,
+      direction_id INT,
+      bus_id STRING,
+      destination STRING,
       eta_seconds INT,
       datetime_polling TIMESTAMP NOT NULL,
-      ingested_at TIMESTAMP NOT NULL
-    ) USING DELTA
-    """
-)
-
-# Silver dims — docs/03 §5–§7
-spark.sql(
-    """
-    CREATE TABLE IF NOT EXISTS silver_stops_dim (
-      stop_id INT,
+      ingested_at TIMESTAMP NOT NULL,
       stop_name STRING,
       stop_lat DOUBLE,
       stop_lon DOUBLE,
       direction_text STRING,
-      in_scope BOOLEAN,
-      catalog_loaded_at DATE
-    ) USING DELTA
-    """
-)
-
-spark.sql(
-    """
-    CREATE TABLE IF NOT EXISTS silver_lines_dim (
-      line_id STRING,
-      line_label STRING,
       name_a STRING,
       name_b STRING,
-      in_scope BOOLEAN,
-      catalog_loaded_at DATE
-    ) USING DELTA
-    """
-)
-
-spark.sql(
-    """
-    CREATE TABLE IF NOT EXISTS silver_stop_lines (
-      stop_id INT,
-      line_id STRING,
-      line_label STRING,
       is_terminus BOOLEAN,
-      direction_id INT,
-      catalog_loaded_at DATE
+      catalog_loaded_at DATE,
+      day_type STRING,
+      map_ok BOOLEAN
     ) USING DELTA
     """
 )
 
-# Gold — docs/03 §8
 spark.sql(
     """
-    CREATE TABLE IF NOT EXISTS gold_stop_line_eta_latest (
-      stop_id INT NOT NULL,
-      line_id STRING NOT NULL,
-      line_label STRING NOT NULL,
-      destination STRING NOT NULL,
-      eta_seconds INT,
-      has_upcoming_bus BOOLEAN NOT NULL,
-      origin_stop_notice BOOLEAN NOT NULL,
-      is_stale BOOLEAN NOT NULL,
-      updated_at TIMESTAMP NOT NULL
+    CREATE TABLE IF NOT EXISTS silver_alerts (
+      _rk STRING NOT NULL,
+      alert_id STRING,
+      line_id STRING,
+      alert_header STRING,
+      alert_cause STRING,
+      alert_effect STRING,
+      alert_url STRING,
+      active_period_start TIMESTAMP,
+      active_period_end TIMESTAMP,
+      snapshot_at TIMESTAMP,
+      ingested_at TIMESTAMP,
+      map_ok BOOLEAN
     ) USING DELTA
     """
 )
 
-print("Tables ready (docs/03 v1.1 MVP):")
-for t in [
-    "bronze_emt_raw",
-    "silver_arrival_observations",
-    "silver_stops_dim",
-    "silver_lines_dim",
-    "silver_stop_lines",
-    "gold_stop_line_eta_latest",
-]:
-    print(f"  {t}: {spark.table(t).count()} row(s)")
+spark.sql(
+    """
+    CREATE TABLE IF NOT EXISTS gold_emt_stop_line (
+      stop_id STRING NOT NULL,
+      line_id STRING NOT NULL,
+      direction_id INT NOT NULL,
+      line_label STRING NOT NULL,
+      stop_name STRING NOT NULL,
+      direction_text STRING,
+      name_a STRING,
+      name_b STRING,
+      destination STRING,
+      eta_seconds_1 INT,
+      bus_id_1 STRING,
+      eta_seconds_2 INT,
+      bus_id_2 STRING,
+      has_upcoming_bus BOOLEAN NOT NULL,
+      is_stale BOOLEAN NOT NULL,
+      origin_stop_notice BOOLEAN NOT NULL,
+      is_terminus BOOLEAN NOT NULL,
+      catalog_loaded_at DATE NOT NULL,
+      day_type STRING NOT NULL,
+      updated_at TIMESTAMP NOT NULL,
+      freq_observed_weekday_min DOUBLE,
+      freq_observed_weekend_min DOUBLE,
+      freq_sample_size_weekday INT,
+      freq_sample_size_weekend INT,
+      alert_active BOOLEAN NOT NULL,
+      alert_header STRING,
+      alert_cause STRING,
+      alert_effect STRING,
+      alert_url STRING
+    ) USING DELTA
+    """
+)
+
+print("Tables ready (contract v4.3 — bronze + silver_arrives + silver_alerts + gold):")
+for t in ["bronze_emt_raw", "silver_arrives", "silver_alerts", "gold_emt_stop_line"]:
+    if spark.catalog.tableExists(t):
+        print(f"  {t}: {spark.table(t).count()} row(s)")
+    else:
+        print(f"  {t}: MISSING")

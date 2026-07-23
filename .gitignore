@@ -6,6 +6,7 @@ env/
 # Variables de entorno y secretos
 .env
 *.env.local
+azure_functions/**/local.settings.json
 
 # Python
 __pycache__/
@@ -24,6 +25,7 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+.cursor/
 
 # Logs locales
 *.log
