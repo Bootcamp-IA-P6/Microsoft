@@ -9,6 +9,18 @@ Cómo cambiar de backend (mock / local / azure):
     Ver agent_client.py — ahí están los 2 puntos de conexión pendientes
     (agente local de Raúl, y Data Agent en Azure vía MCP), cada uno con
     su TODO explicado paso a paso.
+
+CAMBIOS 2026-07-23:
+    - Input de chat migrado de st.form(text_input) a st.chat_input() nativo:
+      queda fijo abajo automáticamente (antes "saltaba" porque el CSS ya
+      apuntaba a [data-testid="stChatInput"] pero el input real era un
+      st.text_input dentro de un st.form, que no es ese componente).
+    - Botón de micrófono separado del input (st.chat_input no admite
+      widgets adicionales adentro).
+    - Ya no hace falta el patrón de "limpiar chat_input_text a mano" —
+      st.chat_input se limpia solo después de enviar.
+    - Labels vacíos de los toggles corregidos (accesibilidad).
+    - use_container_width -> width, por deprecación de Streamlit.
 """
 
 from __future__ import annotations
@@ -116,8 +128,8 @@ if "azure_speech_key" not in st.session_state:
     st.session_state.azure_speech_key = os.getenv("AZURE_SPEECH_KEY", "")
 if "azure_speech_language" not in st.session_state:
     st.session_state.azure_speech_language = os.getenv("AZURE_SPEECH_LANGUAGE", "es-ES")
-if "chat_input_text" not in st.session_state:
-    st.session_state.chat_input_text = ""
+if "pending_chat_input" not in st.session_state:
+    st.session_state.pending_chat_input = None
 if "voice_status" not in st.session_state:
     st.session_state.voice_status = ""
 
@@ -232,7 +244,7 @@ st.markdown(
         background-color: var(--app-accent) !important;
         color: var(--app-bg) !important;
     }}
-    
+
 
     /* Fondo de la zona de chat, que se quedaba blanco al hacer scroll y desplegable del mapa */
     [data-testid="stBottom"] > div {{
@@ -347,20 +359,6 @@ st.markdown(
         color: var(--app-text) !important;
         border: var(--app-border-width) solid var(--app-border) !important;
     }}
-    div[data-testid="stFormSubmitButton"] button {{
-        background-color: var(--app-accent) !important;
-        color: var(--app-bg) !important;
-        border: var(--app-border-width) solid var(--app-accent) !important;
-        box-shadow: none !important;
-    }}
-    div[data-testid="stFormSubmitButton"] button:hover {{
-        filter: brightness(0.95) !important;
-    }}
-    div[data-testid="stFormSubmitButton"]:nth-child(2) button {{
-        background-color: var(--app-bg-card) !important;
-        color: var(--app-text) !important;
-        border: var(--app-border-width) solid var(--app-border) !important;
-    }}
 
     .feedback-row {{
         display: flex;
@@ -407,9 +405,10 @@ with st.sidebar:
         st.caption("Alto contraste")
     with switch_col:
         theme_enabled = st.toggle(
-            "",
+            "Alto contraste",
             value=st.session_state.theme_mode == "dark",
             key="theme_switch",
+            label_visibility="collapsed",
         )
     with right_col:
         st.caption("Oscuro")
@@ -428,9 +427,10 @@ with st.sidebar:
         st.caption("Normal")
     with switch_col:
         text_size_enabled = st.toggle(
-            "",
+            "Tamaño de texto grande",
             value=st.session_state.text_size == "large",
             key="text_size_switch",
+            label_visibility="collapsed",
         )
     with right_col:
         st.caption("Grande")
@@ -442,7 +442,7 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button(t(lang, "clear_chat"), use_container_width=True):
+    if st.button(t(lang, "clear_chat"), width="stretch"):
         st.session_state.history = []
         st.session_state.feedback_given = set()
         st.rerun()
@@ -468,7 +468,7 @@ with header_col2:
 if MAP_IMAGE_PATH.exists():
     with st.expander("🗺️ Ver mapa del alcance"):
         st.caption("Mapa del alcance del servicio")
-        st.image(str(MAP_IMAGE_PATH), use_container_width=True)
+        st.image(str(MAP_IMAGE_PATH), width="stretch")
 else:
     st.info("Añade tu imagen PNG en la carpeta assets con el nombre mapa.png para mostrar el mapa del alcance.")
 
@@ -531,26 +531,15 @@ for i, msg in enumerate(st.session_state.history):
 
 
 # ---------------------------------------------------------------------------
-# Input del usuario
+# Botón de micrófono — separado del input de texto, porque st.chat_input
+# no admite widgets adicionales adentro (a diferencia del st.form anterior).
 # ---------------------------------------------------------------------------
-with st.form("chat_form", clear_on_submit=False):
-    cols = st.columns([7, 1, 1])
-    with cols[0]:
-        question = st.text_input(
-            "",
-            key="chat_input_text",
-            label_visibility="collapsed",
-            placeholder=t(lang, "chat_placeholder"),
-        )
-    with cols[1]:
-        send_clicked = st.form_submit_button("➤", help=t(lang, "send_message"))
-    with cols[2]:
-        mic_clicked = st.form_submit_button("🎙️", help=t(lang, "voice_button_help"))
-
-    if mic_clicked:
+mic_col1, mic_col2 = st.columns([10, 1])
+with mic_col2:
+    if st.button("🎙️", help=t(lang, "voice_button_help"), key="mic_button"):
         transcript, error = transcribe_from_microphone()
         if transcript:
-            st.session_state.chat_input_text = transcript
+            st.session_state.pending_chat_input = transcript
             st.session_state.voice_status = t(lang, "voice_transcribed")
             st.toast(t(lang, "voice_transcribed"))
         else:
@@ -558,24 +547,36 @@ with st.form("chat_form", clear_on_submit=False):
             st.toast(error or t(lang, "voice_error"))
         st.rerun()
 
-    if send_clicked and question:
-        st.session_state.history.append({"role": "user", "content": question})
-        with st.chat_message("user"):
-            st.write(question)
-
-        with st.chat_message("assistant", avatar=str(NAVI_AVATAR_PATH)):
-            with st.spinner(t(lang, "thinking")):
-                answer_text, backend_used = agent_client.ask(question, lang=lang)
-            st.write(answer_text)
-
-        st.session_state.history.append({
-            "role": "assistant",
-            "content": answer_text,
-            "backend": backend_used,
-        })
-        st.session_state.chat_input_text = ""
-        st.session_state.voice_status = ""
-        st.rerun()
-
 if st.session_state.get("voice_status"):
     st.caption(st.session_state["voice_status"])
+
+
+# ---------------------------------------------------------------------------
+# Input del usuario — st.chat_input nativo, queda fijo abajo solo, se limpia
+# solo después de enviar (ya no hace falta tocar session_state a mano).
+# ---------------------------------------------------------------------------
+question = st.chat_input(t(lang, "chat_placeholder"))
+
+# Si venía de una transcripción de voz, se procesa como si el usuario
+# hubiera escrito y enviado ese texto.
+if not question and st.session_state.pending_chat_input:
+    question = st.session_state.pending_chat_input
+    st.session_state.pending_chat_input = None
+
+if question:
+    st.session_state.history.append({"role": "user", "content": question})
+    with st.chat_message("user"):
+        st.write(question)
+
+    with st.chat_message("assistant", avatar=str(NAVI_AVATAR_PATH)):
+        with st.spinner(t(lang, "thinking")):
+            answer_text, backend_used = agent_client.ask(question, lang=lang)
+        st.write(answer_text)
+
+    st.session_state.history.append({
+        "role": "assistant",
+        "content": answer_text,
+        "backend": backend_used,
+    })
+    st.session_state.voice_status = ""
+    st.rerun()

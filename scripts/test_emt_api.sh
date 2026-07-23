@@ -98,7 +98,7 @@ echo "4) POST /v2/transport/busemtmad/stops/${STOP_ID}/arrives/"
 curl -sS -X POST "https://openapi.emtmadrid.es/v2/transport/busemtmad/stops/${STOP_ID}/arrives/" \
   -H "accessToken: ${TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{"cultureInfo":"es","Text_StopRequired_YN":"Y","Text_EstimationsRequired_YN":"Y","Text_LineInfoRequired_YN":"Y","Text_IncidencesRequired_YN":"Y"}' \
+  -d '{"cultureInfo":"es","Text_StopRequired_YN":"Y","Text_EstimationsRequired_YN":"Y","Text_IncidencesRequired_YN":"Y"}' \
   | python3 -c 'import json,sys; d=json.load(sys.stdin);
 for block in d.get("data",[]):
   if isinstance(block.get("Arrive"), list):

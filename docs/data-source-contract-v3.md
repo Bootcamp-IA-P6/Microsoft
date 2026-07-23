@@ -1,6 +1,6 @@
 # Contrato de Origen de Datos: Proyecto EMT Madrid (Sol / Gran Vía)
-**Versión:** 3.0
-**Fecha de actualización:** 2026-07-15
+**Versión:** 3.1
+**Fecha de actualización:** 2026-07-17
 **Estado:** ✅ Cerrado (salvo Fase 2 MVP = sólo bronze/silver parcial, ver sección 8)
 
 ---
@@ -14,6 +14,12 @@
 | 3 | `gold_line_status_5m` confirmado como **postergado** (agregados operacionales, Fase 3+) |
 | 4 | Reemplazada la lógica de `position_type_bus` (no existe en v2) con `is_terminus` derivado del GTFS (`stop_sequence = 1` en `stop_times.txt`) |
 | 5 | Explicitado el plan de construcción por fases (Fase 2 MVP vs Fase 3+) |
+
+### Cambios v3.0 → v3.1
+
+| # | Cambio |
+|---|---|
+| 1 | §10: eliminado `Text_LineInfoRequired_YN` del body de `arrives` — no figura en la documentación oficial EMT ([apidocs.emtmadrid.es](https://apidocs.emtmadrid.es/)); se había introducido por error en scripts internos. Los metadatos de línea en `StopInfo.lines[]` se obtienen con `Text_StopRequired_YN: "Y"`. |
 
 ---
 
@@ -259,7 +265,6 @@ Headers: `accessToken`, `Content-Type: application/json`
   "cultureInfo": "es",
   "Text_StopRequired_YN": "Y",
   "Text_EstimationsRequired_YN": "Y",
-  "Text_LineInfoRequired_YN": "Y",
   "Text_IncidencesRequired_YN": "N"
 }
 ```
@@ -269,5 +274,4 @@ Headers: `accessToken`, `Content-Type: application/json`
 | `cultureInfo` | `"es"` | Idioma de textos en la respuesta. |
 | `Text_StopRequired_YN` | `"Y"` | Metadatos de parada en la respuesta. |
 | `Text_EstimationsRequired_YN` | `"Y"` | Estimaciones de llegada (ETA). |
-| `Text_LineInfoRequired_YN` | `"Y"` | Metadatos de línea asociados a la parada. |
 | `Text_IncidencesRequired_YN` | `"N"` | Sin incidentes (fuera de MVP; ver §5). |

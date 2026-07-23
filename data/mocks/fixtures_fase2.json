@@ -1,0 +1,222 @@
+{
+  "comment": "Mock de fixtures para Z3 (agente especialista) — Fase 2 MVP. Isomórfico a gold_stop_line_eta_latest. Usar en localhost mientras Z2 construye gold en Fabric.",
+  "metadata": {
+    "zone": "Sol / Gran Vía (Madrid Centro)",
+    "generated_at": "2026-07-13T10:30:00Z",
+    "test_questions_covered": [
+      "US-01: ¿Cuánto tarda la línea M1 en llegar a la parada 4035?",
+      "US-02: ¿Qué buses llegan ahora a la parada 4035?",
+      "US-03: ¿Qué autobuses llegan a la parada de Mercado San Fernando?",
+      "US-04 (control): ¿Por qué se retrasó la línea 150? [Debe responder 'no lo sé']"
+    ]
+  },
+
+  "gold_stop_line_eta_latest": [
+    {
+      "stop_id": 4035,
+      "line_id": "001",
+      "line_label": "M1",
+      "destination": "SOL SEVILLA",
+      "eta_seconds": 184,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-13T10:19:32Z"
+    },
+    {
+      "stop_id": 4035,
+      "line_id": "027",
+      "line_label": "27",
+      "destination": "CRISTO REY",
+      "eta_seconds": 420,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-13T10:19:32Z"
+    },
+    {
+      "stop_id": 4035,
+      "line_id": "150",
+      "line_label": "150",
+      "destination": "SEVILLA",
+      "eta_seconds": null,
+      "has_upcoming_bus": false,
+      "origin_stop_notice": true,
+      "is_stale": false,
+      "updated_at": "2026-07-13T10:19:32Z"
+    },
+    {
+      "stop_id": 4045,
+      "line_id": "001",
+      "line_label": "M1",
+      "destination": "SOL SEVILLA",
+      "eta_seconds": 92,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-13T10:19:35Z"
+    },
+    {
+      "stop_id": 4045,
+      "line_id": "201",
+      "line_label": "201",
+      "destination": "ATOCHA",
+      "eta_seconds": 560,
+      "has_upcoming_bus": true,
+      "origin_stop_notice": false,
+      "is_stale": false,
+      "updated_at": "2026-07-13T10:19:35Z"
+    }
+  ],
+
+  "silver_stops_dim": [
+    {
+      "stop_id": 4035,
+      "stop_name": "Mercado San Fernando",
+      "stop_lat": 40.407557,
+      "stop_lon": -3.703891,
+      "direction_text": "Embajadores frente al Nº 60",
+      "in_scope": true,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 4045,
+      "stop_name": "Puerta del Sol",
+      "stop_lat": 40.416775,
+      "stop_lon": -3.703339,
+      "direction_text": "Plaza Mayor lado norte",
+      "in_scope": true,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 5200,
+      "stop_name": "Atocha",
+      "stop_lat": 40.409123,
+      "stop_lon": -3.691234,
+      "direction_text": "Glorieta de Atocha",
+      "in_scope": true,
+      "catalog_loaded_at": "2026-07-10"
+    }
+  ],
+
+  "silver_stop_lines": [
+    {
+      "stop_id": 4035,
+      "line_id": "001",
+      "line_label": "M1",
+      "is_terminus": false,
+      "direction_id": 0,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 4035,
+      "line_id": "027",
+      "line_label": "27",
+      "is_terminus": false,
+      "direction_id": 0,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 4035,
+      "line_id": "150",
+      "line_label": "150",
+      "is_terminus": true,
+      "direction_id": 0,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 4045,
+      "line_id": "001",
+      "line_label": "M1",
+      "is_terminus": false,
+      "direction_id": 0,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 4045,
+      "line_id": "201",
+      "line_label": "201",
+      "is_terminus": false,
+      "direction_id": 0,
+      "catalog_loaded_at": "2026-07-10"
+    },
+    {
+      "stop_id": 5200,
+      "line_id": "201",
+      "line_label": "201",
+      "is_terminus": true,
+      "direction_id": 1,
+      "catalog_loaded_at": "2026-07-10"
+    }
+  ],
+
+  "test_cases": {
+    "us_01_linea_conocida_eta": {
+      "pregunta": "¿Cuánto tarda en llegar la línea M1 a la parada 4035 (Mercado San Fernando)?",
+      "respuesta_esperada": "El próximo M1 llega en 3 minutos (184 segundos).",
+      "fixture_rows": [
+        "gold_stop_line_eta_latest[0]: stop_id=4035, line_id=001, eta_seconds=184"
+      ],
+      "criterios_agente": "Buscar en gold por (stop_id, line_id) y devolver eta_seconds en formato legible"
+    },
+    "us_02_todas_lineas_parada": {
+      "pregunta": "¿Qué autobuses llegan ahora a la parada 4035?",
+      "respuesta_esperada": "En la parada Mercado San Fernando llegan: M1 en 3 minutos hacia Sol Sevilla. Línea 27 en 7 minutos hacia Cristo Rey. Línea 150 tiene origen aquí, la estimación puede no ser precisa.",
+      "fixture_rows": [
+        "gold_stop_line_eta_latest[0,1,2]: stop_id=4035"
+      ],
+      "criterios_agente": "Filtrar gold por stop_id, listar todas las líneas. Manejar origin_stop_notice=true con aviso especial."
+    },
+    "us_03_nombre_parada": {
+      "pregunta": "¿Qué línea puedo tomar en Mercado San Fernando?",
+      "respuesta_esperada": "En Mercado San Fernando pasan las líneas M1, 27 y 150.",
+      "fixture_rows": [
+        "silver_stops_dim[0]: stop_name='Mercado San Fernando' -> stop_id=4035",
+        "silver_stop_lines[0,1,2]: stop_id=4035"
+      ],
+      "criterios_agente": "Resolver nombre -> stop_id en silver_stops_dim, luego listar líneas desde silver_stop_lines"
+    },
+    "us_04_control_no_inventar": {
+      "pregunta": "¿Por qué se retrasó la línea 27 hoy?",
+      "respuesta_esperada": "No tengo información sobre causas de retrasos. Solo puedo ofrecerte el tiempo estimado de llegada actual.",
+      "fixture_rows": "NINGUNA (fuera de alcance)",
+      "criterios_agente": "No inventar causas. Responder 'no tengo ese dato'. silver_incidents NO está en MVP."
+    },
+    "us_01_variante_parada_distinta": {
+      "pregunta": "¿Cuánto tarda en llegar la línea M1 a Puerta del Sol?",
+      "respuesta_esperada": "El próximo M1 llega en menos de 2 minutos (92 segundos) a Puerta del Sol.",
+      "fixture_rows": [
+        "gold_stop_line_eta_latest[3]: stop_id=4045, line_id=001, eta_seconds=92"
+      ],
+      "criterios_agente": "Mismo flujo que US-01, pero otra parada"
+    },
+    "distincion_sin_bus_vs_linea_no_pasa": {
+      "pregunta_1": "¿Qué línea 999 llega a Mercado San Fernando?",
+      "respuesta_esperada_1": "La línea 999 no pasa por esa parada.",
+      "fixture_rows_1": "silver_stop_lines: NO existe fila con stop_id=4035 y line_id=999",
+      "pregunta_2": "¿Qué línea M1 llega a Mercado San Fernando ahora?",
+      "respuesta_esperada_2": "En este momento no hay buses M1 próximos, pero la línea sí pasa por aquí.",
+      "fixture_rows_2": "gold_stop_line_eta_latest: existe fila (4035, M1) pero con has_upcoming_bus=false",
+      "criterios_agente": "Distinguir: línea en catálogo + sin ETA = sin bus ahora. Línea no en catálogo = no pasa."
+    }
+  },
+
+  "cómo_usar_este_mock": {
+    "paso_1": "Copiar este JSON a /agents/fixtures_fase2.json",
+    "paso_2": "Crear un cliente Python en /agents/mock_client.py que exponga métodos como:",
+    "paso_2a": "  get_gold_by_stop(stop_id: int) -> list[dict]  # filtra gold_stop_line_eta_latest por stop_id",
+    "paso_2b": "  get_gold_by_stop_line(stop_id: int, line_id: str) -> dict  # busca fila exacta",
+    "paso_2c": "  search_stop_by_name(name: str) -> list[dict]  # busca en silver_stops_dim",
+    "paso_2d": "  get_lines_for_stop(stop_id: int) -> list[str]  # filtra silver_stop_lines",
+    "paso_3": "El agente usa mock_client en Fase 2. En Fase 3 se reemplaza por conexión real a Fabric (same methods, diferente backend)",
+    "paso_4": "Cuando Z2 cierre gold real, cambiar mock_client.py a conectarse a Fabric, mantener mismas firmas de métodos"
+  },
+
+  "validación": {
+    "todas_preguntas_respondibles": true,
+    "sin_datos_hallados": "solo US-04 (control), esperado",
+    "esquema_isomórfico": "exactamente gold_stop_line_eta_latest + silver_*_dim",
+    "caso_linea_cabecera_nulo": "stop_id=4035, line_150: eta_seconds=null, origin_stop_notice=true (representa línea 150 en cochera)",
+    "caso_multiples_lineas": "stop_id=4035 con 3 líneas (M1, 27, 150) para probar US-02"
+  }
+}
