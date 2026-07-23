@@ -269,6 +269,22 @@ Replace Spark transforms with Real-Time Intelligence where it fits.
 
 Business logic stays conceptually the same; engine changes.
 
+**Why now:** Lakehouse notebook ingest/transform wall-clock (session + HTTP) is too slow for target cadences. Phase 3 split was structural prep; Phase 4 removes Spark from the hot path.
+
+## Branch
+
+`feat/fabric-phase4` (from Phase 3). Lakehouse Phase 0–3 path remains rollback until Agent is re-pointed and validated.
+
+## Status
+
+- [ ] Decide Eventhouse / Eventstream workspace objects (names, retention)
+- [ ] Ingest: UDF (or non-Spark poller) → Eventstream → EH bronze-equivalent
+- [ ] Map `pipeline/` domains to KQL / MVs (see table below)
+- [ ] Gold serving grain = today’s `gold_emt_stop_line` (Agent-compatible)
+- [ ] Keep arrives vs alerts column ownership (no cross-wipe)
+- [ ] Dual-run / cutover plan vs Lakehouse gold
+- [ ] Agent rebind smoke (ETA + US-07 alerts + US-08 freq)
+
 ## Target sketch
 
 ```text
@@ -283,16 +299,18 @@ Ingestion (UDF / poller)
 
 Domain split **must** survive the move:
 
-| Today (Lakehouse) | Future (conceptual) |
-|-------------------|---------------------|
-| `silver_arrives` | Arrives fact / history in EH |
-| `silver_alerts` | Alerts latest snapshot in EH |
-| `gold_emt_stop_line` | Serving view/table for Agent |
+| Today (Lakehouse) | Future (conceptual) | Phase 2–3 code SoT |
+|-------------------|---------------------|--------------------|
+| `silver_arrives` | Arrives fact / history in EH | `arrives_ingest` + `arrives_transform` / `frequency` |
+| `silver_alerts` | Alerts latest snapshot in EH | `alerts_ingest` + `alerts_transform` / `alerts_project` |
+| `gold_emt_stop_line` | Serving view/table for Agent | gold arrives MERGE + gold alerts MERGE (separate) |
 
 ```text
 arrives_normalize / frequency / latest  → KQL / Materialized Views
 alerts_normalize / alerts_project       → Dedicated KQL (or update policies)
 ```
+
+**Contract:** physical engine may change; Agent-facing grain and column meanings stay v4.3.1 unless a new ADR says otherwise. Freq = ADR-038.
 
 ---
 
