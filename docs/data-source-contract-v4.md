@@ -1,18 +1,28 @@
 # Contrato de Origen de Datos: Proyecto EMT Madrid
-**Versión:** 4.2
-**Fecha:** 2026-07-20
-**Estado:** Alineado con esquema medallion aprobado (Bronze / Silver / Gold — 1 tabla cada uno)
+**Versión:** 4.3
+**Fecha:** 2026-07-23
+**Estado:** Alineado con esquema medallion (Bronze 1 · Silver por dominio · Gold 1) — [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) enmendado, [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md)
 
 ---
 
 ## 0. Qué cambió respecto a la revisión anterior
+
+### 4.2 → 4.3 (2026-07-23)
+
+| # | Antes (4.2) | Ahora (4.3) |
+|---|---|---|
+| 1 | Cap físico 1+1+1 (`silver_emt` único) | Silver por dominio: `silver_arrives` + `silver_alerts` ([ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md)) |
+| 2 | Alerts: Bronze → MERGE Gold `alert_*` (sin Silver) | Bronze → **`silver_alerts`** (latest-only) → MERGE Gold `alert_*` (columnas Gold **sin cambio**) |
+| 3 | Nombre Silver polls = `silver_emt` | Rename → **`silver_arrives`** (mismo contrato poll-fact) |
+
+### 4.1 → 4.2 (histórico)
 
 | # | Antes (revisión 4.1) | Ahora (4.2) |
 |---|---|---|
 | 1 | Incidencias SoT = `arrives` Incident (`Text_IncidencesRequired_YN=Y`) | SoT = S2 GTFS-RT `servicealerts/proto`; arrives con `Incidences=N` ([ADR-011](adr/ADR-011-disruption-sot-is-gtfs-rt-servicealerts-not-arrive-incident.md), [ADR-010](adr/ADR-010-eta-sot-is-post-arrives-only.md)) |
 | 2 | Gold = `gold_parada_linea`; ETA de 1 slot; `incident_*` | Gold = `gold_emt_stop_line`; ETA `eta_seconds_1/2` + `bus_id_1/2`; `alert_*` ([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-022](adr/ADR-022-gold-eta-exposes-two-slots-under-one-table-constraint.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md)) |
 | 3 | Freq = `freq_observed_minutes` + `freq_window_desc` | `freq_observed_weekday/weekend_min` + `freq_sample_size_*`; sin `freq_window_desc` ([ADR-023](adr/ADR-023-gold-frequency-windows-weekday-weekend-with-sample-sizes-no-.md)) |
-| 4 | Silver con columnas `incident_*` | Silver **sin** alert; historial de polls + `day_type` + `map_ok` ([ADR-016](adr/ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md)) |
+| 4 | Silver con columnas `incident_*` | Silver polls **sin** alert; historial + `day_type` + `map_ok` ([ADR-016](adr/ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md)) |
 | 5 | Bronze solo arrives | Bronze = S1 REST + S2 RT (JSON); GTFS no entra en Bronze ([ADR-017](adr/ADR-017-bronze-holds-rest-and-rt-payloads-only-gtfs-bootstraps-silve.md), [ADR-018](adr/ADR-018-bronze-contract-uuid-ingest-id-and-no-enforced-column-types.md)) |
 | 6 | Paso = GTFS bootstrap | Paso = S1 line stops SoT; path → `direction_id`; Arrive `destination` → dirección ([ADR-009](adr/ADR-009-served-stop-sot-is-s1-line-stops-path-not-gtfs-alone.md), [ADR-026](adr/ADR-026-map-arrive-destination-to-direction-id-require-path-mapping-.md)) |
 | 7 | Semantic / KPI como parte del contrato de datos | Fuera del esquema físico de dominio ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)) |
@@ -61,13 +71,14 @@ US-05 (chat) y US-06 quedan fuera del dominio Fabric de este contrato.
 - Ocupación, tarifas, billetes; Metro / Cercanías / otros consorcios
 - Paradas/líneas fuera del geofence
 - Etiquetas de pico, flota diaria total, log de calidad US-06, KPI, detalle Semantic (fuera del esquema físico)
-- Columnas alert en Silver; doble almacenamiento Bronze raw `.pb`; columna `in_scope` en Gold; `direction_path` / `direction_code`; `freq_window_desc`
+- Columnas alert en **`silver_arrives`** (van en `silver_alerts`); doble almacenamiento Bronze raw `.pb`; columna `in_scope` en Gold; `direction_path` / `direction_code`; `freq_window_desc`
+- Tabla Gold separada solo de alerts (las columnas `alert_*` en `gold_emt_stop_line` se mantienen)
 
 ---
 
-## 4. Arquitectura — 3 tablas físicas, roles distintos
+## 4. Arquitectura — roles medallion (Bronze 1 · Silver por dominio · Gold 1)
 
-([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-005](adr/ADR-005-source-taxonomy-s1-rest-only-s2-rt-servicealerts-s3-gtfs.md), [ADR-029](adr/ADR-029-polling-cadences-arrives-60s-try-and-adjust-rt-300s.md))
+([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-005](adr/ADR-005-source-taxonomy-s1-rest-only-s2-rt-servicealerts-s3-gtfs.md), [ADR-029](adr/ADR-029-polling-cadences-arrives-60s-try-and-adjust-rt-300s.md))
 
 | Código | Significado |
 |--------|-------------|
@@ -81,8 +92,8 @@ US-05 (chat) y US-06 quedan fuera del dominio Fabric de este contrato.
 | ID de línea | S1 `line` = S3 `route_id` | — | S2 Catalog JSON |
 | ETA | **S1** `arrives` | Ninguno | S3, S2 |
 | Paso · seed | **S1** line stops | Atributos GTFS (nombre·coords) | S2 |
-| Incidencias | **S2** proto | Ninguno | S1 Incident, S2 Catalog JSON |
-| Frecuencia | **Observación poll Silver** | Ninguno | GTFS freq, EMT Frequency* |
+| Incidencias | **S2** proto → `silver_alerts` | Ninguno | S1 Incident, S2 Catalog JSON |
+| Frecuencia | **Observación** `silver_arrives` | Ninguno | GTFS freq, EMT Frequency* |
 | day type | **S1** calendar | GTFS calendar | — |
 
 ```mermaid
@@ -91,16 +102,19 @@ flowchart LR
   S2[S2_mdb3102_RT]
   S3[S3_GTFS_zip]
   B[bronze_emt_raw]
-  S[silver_emt]
+  SA[silver_arrives]
+  SAL[silver_alerts]
   G[gold_emt_stop_line]
   S1 --> B
   S2 --> B
-  S3 --> S
-  B --> S
-  S --> G
+  S3 --> SA
+  B --> SA
+  B --> SAL
+  SA --> G
+  SAL --> G
 ```
 
-GTFS (S3) bootstrap → Silver directamente (no entra en Bronze). Semantic / Data Agent leen Gold ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)).
+GTFS (S3) bootstrap → `silver_arrives` directamente (no entra en Bronze). Semantic / Data Agent leen Gold ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)).
 
 **Frecuencia de actualización**
 
@@ -109,25 +123,25 @@ GTFS (S3) bootstrap → Silver directamente (no entra en Bronze). Semantic / Dat
 | GTFS + seed S1 line stops | 1×/día | Paso alineado con S1 |
 | S1 calendar | 1×/día | Material para `day_type` |
 | S1 `arrives` | Ideal **60s** | Mantener·intentar. `is_stale` = 180s fijo |
-| S2 `servicealerts` | **300s** | |
+| S2 `servicealerts` | **300s** | → `silver_alerts` latest-only |
 
 - **Bronze:** carga bruta S1/S2; sin forzar tipos ni NOT NULL.
-- **Silver:** historial append-only de polls; fuente para reconstruir Gold y calcular frecuencia.
-- **Gold:** una fila por `(stop_id, line_id, direction_id)` in-scope con paso S1; estado reciente + agregados.
+- **Silver arrives:** historial append-only de polls; fuente de freq y ETA latest.
+- **Silver alerts:** snapshot tipado latest-only; única entrada de `alert_*` a Gold.
+- **Gold:** una fila por `(stop_id, line_id, direction_id)` in-scope con paso S1; estado reciente + agregados + `alert_*`.
 
 ### Pipeline
 
-1. **1×/día:** atributos GTFS + S1 line stops → seed `silver_emt` · `catalog_loaded_at`
+1. **1×/día:** atributos GTFS + S1 line stops → seed `silver_arrives` · `catalog_loaded_at`
 2. **1×/día:** S1 calendar → Bronze → Silver/Gold `day_type`
-3. **~60s:** S1 `arrives` → Bronze → append Silver (`_rk`, resolve label, `destination`→`direction_id`)
-4. **300s:** S2 `.pb` → JSON → Bronze → al ensamblar Gold, MERGE `alert_*` por `line_id`
-5. Desde Silver: freq `line_id`+ventana + último poll (ETA 1·2) → MERGE `gold_emt_stop_line`
+3. **~60s:** S1 `arrives` → Bronze → append `silver_arrives` (`_rk`, resolve label, `destination`→`direction_id`) → MERGE Gold (ETA·stale·freq). **No** toca `alert_*`.
+4. **~300s:** S2 `.pb` → JSON → Bronze → upsert `silver_alerts` → **misma ejecución** MERGE Gold `alert_*` por `line_id` (`alert_active` con `now`)
 
 ---
 
 ## 5. Diagrama del esquema físico completo
 
-Tres tablas Delta (`lh_emt_madrid`). Relaciones lógicas de pipeline (no FK físicas obligatorias). Detalle de columnas y reglas: §6–§8.
+Cuatro tablas Delta de dominio (`lh_emt_madrid`). Relaciones lógicas de pipeline (no FK físicas obligatorias). Detalle: §6–§8.
 
 ```mermaid
 erDiagram
@@ -145,7 +159,7 @@ erDiagram
     string timezone_note
   }
 
-  silver_emt {
+  silver_arrives {
     string _rk PK
     string stop_id
     string line_id
@@ -165,6 +179,21 @@ erDiagram
     boolean is_terminus
     date catalog_loaded_at
     string day_type
+    boolean map_ok
+  }
+
+  silver_alerts {
+    string _rk PK
+    string alert_id
+    string line_id
+    string alert_header
+    string alert_cause
+    string alert_effect
+    string alert_url
+    timestamp active_period_start
+    timestamp active_period_end
+    timestamp snapshot_at
+    timestamp ingested_at
     boolean map_ok
   }
 
@@ -200,14 +229,17 @@ erDiagram
     string alert_url
   }
 
-  bronze_emt_raw ||--o{ silver_emt : "transform / append polls"
-  silver_emt ||--o| gold_emt_stop_line : "MERGE último poll + freq + alert"
+  bronze_emt_raw ||--o{ silver_arrives : "transform / append polls"
+  bronze_emt_raw ||--o{ silver_alerts : "transform / upsert alerts"
+  silver_arrives ||--o| gold_emt_stop_line : "MERGE último poll + freq"
+  silver_alerts ||--o| gold_emt_stop_line : "MERGE alert_* por line_id"
 ```
 
 | Tabla | Grain | Rol |
 |-------|-------|-----|
 | `bronze_emt_raw` | `(ingest_id, resource_kind, resource_key)` | Crudo S1+S2 |
-| `silver_emt` | 1 poll `(stop_id, line_id, direction_id)` · PK `_rk` | Historial; sin alert |
+| `silver_arrives` | 1 poll `(stop_id, line_id, direction_id)` · PK `_rk` | Historial polls; sin alert |
+| `silver_alerts` | `alert_id` × `line_id` · PK `_rk` | Snapshot alerts; latest-only |
 | `gold_emt_stop_line` | PK `(stop_id, line_id, direction_id)` | Serving agente |
 
 ---
@@ -251,11 +283,13 @@ Sin `Text_LineInfoRequired_YN` (no está en el esquema oficial). Con Incidences=
 
 ---
 
-## 7. Capa Silver: `silver_emt`
+## 7. Capa Silver
 
-([ADR-016](adr/ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md), [ADR-019](adr/ADR-019-direction-grain-key-is-direction-id-only.md), [ADR-020](adr/ADR-020-stop-id-stored-as-string-for-stability-and-portability.md), [ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md))
+### 7.1 `silver_arrives` (ex `silver_emt`)
 
-**Propósito:** fact de historial de polls. Material de frecuencia observada. Fuera del alcance del Data Agent. **Sin** columnas alert (POC).
+([ADR-016](adr/ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-019](adr/ADR-019-direction-grain-key-is-direction-id-only.md), [ADR-020](adr/ADR-020-stop-id-stored-as-string-for-stability-and-portability.md), [ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md))
+
+**Propósito:** fact de historial de polls. Material de frecuencia observada. Fuera del alcance del Data Agent. **Sin** columnas alert.
 
 **Grain / PK:** una fila = 1 poll de `(stop_id, line_id, direction_id)` in-scope (con o sin bus).
 
@@ -296,7 +330,7 @@ _rk = SHA256(
 | `SA` | Sábado |
 | `FE` | Festivo/domingo |
 
-### Reglas de `silver_emt`
+#### Reglas de `silver_arrives`
 
 1. **Seed:** insertar `(stop_id, line_id, direction_id)` in-scope. Conjunto de paso = alineado con **S1 line stops SoT**. path `1` → `direction_id=0`, path `2` → `direction_id=1` (**obligatorio**). Nombre·coords pueden denormalizarse desde GTFS ([ADR-009](adr/ADR-009-served-stop-sot-is-s1-line-stops-path-not-gtfs-alone.md)).
 2. **Sin paso:** no hay combinación → no hay fila Gold.
@@ -308,11 +342,44 @@ _rk = SHA256(
 
 **Nota:** denormalización a propósito (nombre, coords, etc. por fila). Con ~52 paradas el volumen es chico; cero joins para servir Gold/agente pesa más que el almacenamiento en PoC.
 
+### 7.2 `silver_alerts`
+
+([ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-011](adr/ADR-011-disruption-sot-is-gtfs-rt-servicealerts-not-arrive-incident.md), [ADR-008](adr/ADR-008-timezone-europe-madrid-for-calendar-day-type-and-alert-activ.md))
+
+**Propósito:** fact tipado latest-only de S2 `servicealerts`. Única entrada para proyectar `alert_*` en Gold. Fuera del alcance del Data Agent.
+
+**Grain / PK (A-1):** una fila = `alert_id` × `line_id`.
+
+```text
+_rk = SHA256(alert_id | line_id | snapshot_at)
+```
+
+| column | data type | Origen / derivado | Regla NULL |
+|--------|-----------|-------------------|------------|
+| `_rk` | string | PK | NOT NULL |
+| `alert_id` | string | GTFS-RT `id` | NOT NULL |
+| `line_id` | string | route/line resuelto | NULL si `map_ok=false` |
+| `alert_header` / `alert_cause` / `alert_effect` / `alert_url` | string | S2 | NULL permitido |
+| `active_period_start` / `active_period_end` | timestamp | S2 `active_period` | NULL si ausente |
+| `snapshot_at` | timestamp | momento del snapshot | NOT NULL |
+| `ingested_at` | timestamp | Bronze | NOT NULL |
+| `map_ok` | boolean | resolve → `line_id` | false → excluido de Gold |
+
+**Sin** columna `alert_active` en Silver: se calcula en el ensamblado de Gold con `now` (Europe/Madrid).
+
+#### Reglas de `silver_alerts`
+
+1. **latest-only:** upsert/reemplazo del snapshot actual; sin historial append en POC.
+2. Un alert que afecta N líneas → **N filas** (`alert_id` × `line_id`).
+3. **Prohibido** join por RT `stop_id` hacia grain de parada.
+4. Fallo de mapeo de línea → fila con `map_ok=false` (o equivalente) en Silver/log; **no** inventar `line_id`; **no** MERGE a Gold.
+5. Job de alerts: tras upsert Silver, **misma ejecución** MERGE `alert_*` en Gold. El job de arrives **no** modifica `alert_*`.
+
 ---
 
 ## 8. Capa Gold: `gold_emt_stop_line`
 
-([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-022](adr/ADR-022-gold-eta-exposes-two-slots-under-one-table-constraint.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-028](adr/ADR-028-freshness-is-stale-after-180-seconds-no-gold-in-scope-column.md))
+([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-022](adr/ADR-022-gold-eta-exposes-two-slots-under-one-table-constraint.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-028](adr/ADR-028-freshness-is-stale-after-180-seconds-no-gold-in-scope-column.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md))
 
 **Propósito:** serving US-01/02/03/07/08. Tabla de dominio que lee el Data Agent.
 
@@ -344,15 +411,15 @@ Una fila por combinación in-scope·paso S1 alineado, con o sin bus. Sin filas d
 | `freq_observed_weekend_min` | double | Igual fórmula `line_id`+ventana SA/FE | NULL si &lt; 20 · replicado por línea |
 | `freq_sample_size_weekday` | int | Nº observaciones válidas line·LA | Replicado por línea |
 | `freq_sample_size_weekend` | int | Nº observaciones válidas line·SA/FE | Replicado por línea |
-| `alert_active` | boolean | S2 `active_period` vs now | NOT NULL |
-| `alert_header` | string | S2 | NULL si inactivo |
-| `alert_cause` | string | S2 | NULL si inactivo |
-| `alert_effect` | string | S2 | NULL si inactivo |
-| `alert_url` | string | S2 | NULL si inactivo |
+| `alert_active` | boolean | `silver_alerts` period vs **now** en ensamblado | NOT NULL |
+| `alert_header` | string | `silver_alerts` | NULL si inactivo |
+| `alert_cause` | string | `silver_alerts` | NULL si inactivo |
+| `alert_effect` | string | `silver_alerts` | NULL si inactivo |
+| `alert_url` | string | `silver_alerts` | NULL si inactivo |
 
-**Contrato `alert_*`:** atributo a nivel `line_id` **replicado** en cada fila stop×direction. No es incidencia por parada. Prohibido join por RT `stop_id`.
+**Contrato `alert_*`:** atributo a nivel `line_id` **replicado** en cada fila stop×direction. No es incidencia por parada. Prohibido join por RT `stop_id`. **Fuente única:** `silver_alerts` (no re-parsear Bronze en el job de Gold para alerts).
 
-**Contrato `freq_*`:** grain de agregación = **`line_id` + ventana**. No por stop×direction. **Mismo valor replicado** en todas las filas Gold del mismo `line_id`.
+**Contrato `freq_*`:** grain de agregación = **`line_id` + ventana**. No por stop×direction. **Mismo valor replicado** en todas las filas Gold del mismo `line_id`. Fuente: historial `silver_arrives`.
 
 **Deduplicación:** MERGE on PK.
 
@@ -393,9 +460,9 @@ Orientación no vinculante para quien monte el Semantic sobre Gold:
 
 ([ADR-012](adr/ADR-012-frequency-sot-is-observed-silver-polls-with-no-planned-fallb.md), [ADR-024](adr/ADR-024-observed-frequency-aggregation-grain-is-line-id-plus-day-typ.md), [ADR-025](adr/ADR-025-observed-headway-formula-is-median-of-successive-gaps-in-min.md), [ADR-030](adr/ADR-030-frequency-response-gate-20-observations-preferred-24h-warmup.md))
 
-**Decisión cerrada:** frecuencia = agregación del historial real de `silver_emt`. Nunca GTFS planificado ni Frequency* de EMT. Sin historial suficiente → US-04 ("no lo sé"), sin fallback silencioso.
+**Decisión cerrada:** frecuencia = agregación del historial real de `silver_arrives`. Nunca GTFS planificado ni Frequency* de EMT. Sin historial suficiente → US-04 ("no lo sé"), sin fallback silencioso.
 
-- Solo Silver con `bus_id IS NOT NULL` cuenta como observación válida. Mismo poll bucket·mismo `bus_id` = 1 vez.
+- Solo `silver_arrives` con `bus_id IS NOT NULL` cuenta como observación válida. Mismo poll bucket·mismo `bus_id` = 1 vez.
 - Grain de agregación: **`line_id` + ventana** (weekday=`LA`, weekend=`SA`\|`FE`).
 - Fórmula: timestamps válidos ordenados → **mediana** de intervalos consecutivos (min) → `freq_observed_*_min`.
 - Sample de la ventana **&lt; 20** → ese `freq_observed_*` = NULL.
@@ -408,14 +475,15 @@ Orientación no vinculante para quien monte el Semantic sobre Gold:
 
 ## 11. Incidencias (US-07) — S2 servicealerts
 
-([ADR-011](adr/ADR-011-disruption-sot-is-gtfs-rt-servicealerts-not-arrive-incident.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-008](adr/ADR-008-timezone-europe-madrid-for-calendar-day-type-and-alert-activ.md))
+([ADR-011](adr/ADR-011-disruption-sot-is-gtfs-rt-servicealerts-not-arrive-incident.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-008](adr/ADR-008-timezone-europe-madrid-for-calendar-day-type-and-alert-activ.md))
 
 **Fuente de verdad:** S2 GTFS-RT `servicealerts/proto` (poll ~300s). **No** usar Incident embebido en `arrives`.
 
-- Ingestión: `.pb` → JSON → `bronze_emt_raw` → al MERGE de Gold, proyectar `alert_*` por `line_id`.
-- `alert_active`: `true` si `now` (Europe/Madrid) cae en `active_period` del alert S2.
+- Ingestión: `.pb` → JSON → `bronze_emt_raw` → **`silver_alerts`** (latest-only, grain `alert_id`×`line_id`) → MERGE Gold `alert_*` por `line_id`.
+- `alert_active`: `true` si `now` (Europe/Madrid) cae en `active_period` **en el ensamblado de Gold** (no se persiste como hecho en Silver).
 - Textos (`alert_header`, `alert_cause`, `alert_effect`, `alert_url`) NULL cuando inactivo.
 - Semántica: atributo de **línea**, replicado en cada fila stop×direction del mismo `line_id`. No join por `stop_id` del RT.
+- Fallo de mapeo a `line_id`: `map_ok=false` en Silver; excluido de Gold.
 
 El body de `arrives` permanece con `Text_IncidencesRequired_YN=N` (ver §6); ETA no depende de incidencias.
 
