@@ -1,4 +1,4 @@
-# Fabric notebook — contract v4.3 poll + transform (arrives Pipeline step, paste-only)
+# Fabric notebook — contract v4.3.1 poll + transform (arrives Pipeline step, paste-only)
 #
 # Prereq: create/migrate + bootstrap → silver_arrives
 # If ImportError: run once → %pip install requests
@@ -8,9 +8,9 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Poll arrives → bronze → silver_arrives → gold ETA/freq (contract v4.3 · Phase 1)
+# MAGIC # Poll arrives → bronze → silver_arrives → gold ETA/freq (contract v4.3.1 · Phase 1)
 # MAGIC Does **not** update Gold `alert_*` — that is `nb_alerts_silver_gold`.
-# MAGIC Phase 1: fewer collect()/count jobs; gold from latest poll only; freq in Spark.
+# MAGIC Phase 1 perf + freq visit first-seen ([ADR-038](../docs/adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md)).
 
 # COMMAND ----------
 
@@ -658,68 +658,108 @@ def delta_sql_retry(spark, sql: str, *, label: str, attempts: int = 6) -> None:
     raise RuntimeError(f"{label}: exhausted retries") from last
 
 
-def median_gaps_minutes(timestamps: list[datetime]) -> tuple[float | None, int]:
-    uniq = sorted(set(timestamps))
-    n = len(uniq)
-    if n < 2:
-        return None, n
-    gaps = [(uniq[i] - uniq[i - 1]).total_seconds() / 60.0 for i in range(1, n)]
-    gaps = [g for g in gaps if g > 0]
-    if not gaps:
-        return None, n
-    return float(statistics.median(gaps)), n
-
-
-def _phase1_timer():
-    t0 = time.perf_counter()
-
-    def lap(label: str) -> None:
-        print(f"[phase1 timing] {label}: {time.perf_counter() - t0:.2f}s since start")
-
-    return lap
+# Observed headway (ADR-025 + ADR-038): visit first-seen at stop×line×direction,
+# gaps pooled to line×window median. Not inter-poll wall-clock gaps.
+FREQ_VISIT_BREAK_MIN = 20.0  # same bus gone ≥ this → new visit / observation
+FREQ_GAP_MIN_MIN = 1.0  # drop sub-minute noise (sequential poll artifact)
+FREQ_GAP_MAX_MIN = 60.0  # drop overnight / service gaps
 
 
 def compute_freq_by_line_spark(spark, *, freq_min: int) -> dict[str, dict]:
-    """Median successive gaps per line×window.
+    """Median headway (min) per line×window from visit first-seen observations.
 
-    Gaps computed in Spark (no full-row collect); exact median in Python on gap values only
-    (same as Phase 0 statistics.median — not percentile_approx).
+    1) Sightings with bus_id at stop×line×direction×window
+    2) New observation when first sighting of bus, or same bus reappears after
+       FREQ_VISIT_BREAK_MIN
+    3) Successive observation gaps within stop×line×direction×window
+    4) Keep gaps in [FREQ_GAP_MIN_MIN, FREQ_GAP_MAX_MIN]
+    5) Pool gaps by line×window → statistics.median; sample = observation count
     """
     polls = (
         spark.table("silver_arrives")
-        .filter("bus_id IS NOT NULL AND map_ok = true AND day_type IN ('LA','SA','FE')")
+        .filter(
+            "bus_id IS NOT NULL AND map_ok = true AND day_type IN ('LA','SA','FE') "
+            "AND direction_id IS NOT NULL"
+        )
         .select(
+            "stop_id",
             "line_id",
+            "direction_id",
             "bus_id",
             "datetime_polling",
             F.when(F.col("day_type") == "LA", F.lit("weekday"))
             .otherwise(F.lit("weekend"))
             .alias("window"),
         )
-        .dropDuplicates(["line_id", "bus_id", "datetime_polling", "window"])
+        .dropDuplicates(
+            [
+                "stop_id",
+                "line_id",
+                "direction_id",
+                "bus_id",
+                "datetime_polling",
+                "window",
+            ]
+        )
     )
-    ts = polls.select("line_id", "window", "datetime_polling").dropDuplicates()
-    w = Window.partitionBy("line_id", "window").orderBy("datetime_polling")
+
+    w_bus = Window.partitionBy(
+        "stop_id", "line_id", "direction_id", "bus_id", "window"
+    ).orderBy("datetime_polling")
+    observations = (
+        polls.withColumn("prev_bus_ts", F.lag("datetime_polling").over(w_bus))
+        .withColumn(
+            "gap_same_bus_min",
+            F.when(
+                F.col("prev_bus_ts").isNotNull(),
+                (F.unix_timestamp("datetime_polling") - F.unix_timestamp("prev_bus_ts"))
+                / 60.0,
+            ),
+        )
+        .withColumn(
+            "is_new_observation",
+            F.col("prev_bus_ts").isNull()
+            | (F.col("gap_same_bus_min") >= F.lit(FREQ_VISIT_BREAK_MIN)),
+        )
+        .filter(F.col("is_new_observation"))
+        .select(
+            "stop_id",
+            "line_id",
+            "direction_id",
+            "window",
+            F.col("datetime_polling").alias("obs_ts"),
+        )
+    )
+
+    w_obs = Window.partitionBy(
+        "stop_id", "line_id", "direction_id", "window"
+    ).orderBy("obs_ts")
     gaps = (
-        ts.withColumn("prev", F.lag("datetime_polling").over(w))
+        observations.withColumn("prev_obs", F.lag("obs_ts").over(w_obs))
         .withColumn(
             "gap_min",
-            (F.unix_timestamp("datetime_polling") - F.unix_timestamp("prev")) / 60.0,
+            (F.unix_timestamp("obs_ts") - F.unix_timestamp("prev_obs")) / 60.0,
         )
-        .filter("prev IS NOT NULL AND gap_min > 0")
+        .filter(
+            F.col("prev_obs").isNotNull()
+            & (F.col("gap_min") >= F.lit(FREQ_GAP_MIN_MIN))
+            & (F.col("gap_min") <= F.lit(FREQ_GAP_MAX_MIN))
+        )
         .select("line_id", "window", "gap_min")
     )
+
     n_by = {
         (r["line_id"], r["window"]): int(r["n"])
-        for r in ts.groupBy("line_id", "window").agg(F.count("*").alias("n")).collect()
+        for r in observations.groupBy("line_id", "window")
+        .agg(F.count("*").alias("n"))
+        .collect()
     }
     gaps_by: dict[tuple[str, str], list[float]] = {}
     for r in gaps.collect():
         gaps_by.setdefault((r["line_id"], r["window"]), []).append(float(r["gap_min"]))
 
     freq_by_line: dict[str, dict] = {}
-    keys = set(n_by) | set(gaps_by)
-    for lid, window in keys:
+    for lid, window in set(n_by) | set(gaps_by):
         n = n_by.get((lid, window), 0)
         gap_list = gaps_by.get((lid, window), [])
         med = float(statistics.median(gap_list)) if gap_list else None
@@ -739,6 +779,15 @@ def compute_freq_by_line_spark(spark, *, freq_min: int) -> dict[str, dict]:
             slot["freq_sample_size_weekend"] = n
             slot["freq_observed_weekend_min"] = med if n >= freq_min else None
     return freq_by_line
+
+
+def _phase1_timer():
+    t0 = time.perf_counter()
+
+    def lap(label: str) -> None:
+        print(f"[phase1 timing] {label}: {time.perf_counter() - t0:.2f}s since start")
+
+    return lap
 
 
 def run_transform(

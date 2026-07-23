@@ -1,11 +1,17 @@
 # Contrato de Origen de Datos: Proyecto EMT Madrid
-**Versión:** 4.3
+**Versión:** 4.3.1
 **Fecha:** 2026-07-23
 **Estado:** Alineado con esquema medallion (Bronze 1 · Silver por dominio · Gold 1) — [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) enmendado, [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md)
 
 ---
 
 ## 0. Qué cambió respecto a la revisión anterior
+
+### 4.3 → 4.3.1 (2026-07-23)
+
+| # | Antes (4.3) | Ahora (4.3.1) |
+|---|---|---|
+| 1 | Freq: mediana de gaps entre `datetime_polling` únicos por `line_id`×ventana (ambiguo → gaps de poll) | Freq: observación = first-seen de visita de bus en stop×line×direction; gaps [1,60] min; mediana por `line_id`×ventana ([ADR-038](adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md)). **Sin cambio de columnas Gold** |
 
 ### 4.2 → 4.3 (2026-07-23)
 
@@ -407,10 +413,10 @@ Una fila por combinación in-scope·paso S1 alineado, con o sin bus. Sin filas d
 | `catalog_loaded_at` | date | — | NOT NULL |
 | `day_type` | string | Hoy S1 calendar `LA`\|`SA`\|`FE` | NOT NULL |
 | `updated_at` | timestamp | Último poll | NOT NULL |
-| `freq_observed_weekday_min` | double | Mediana (min) de intervalos observados `line_id`+ventana LA | NULL si &lt; 20 · replicado por línea |
-| `freq_observed_weekend_min` | double | Igual fórmula `line_id`+ventana SA/FE | NULL si &lt; 20 · replicado por línea |
-| `freq_sample_size_weekday` | int | Nº observaciones válidas line·LA | Replicado por línea |
-| `freq_sample_size_weekend` | int | Nº observaciones válidas line·SA/FE | Replicado por línea |
+| `freq_observed_weekday_min` | double | Mediana (min) headway observado, ventana **LA** (misma fórmula ADR-038 que weekend) | NULL si sample &lt; 20 · replicado por línea |
+| `freq_observed_weekend_min` | double | Mediana (min) headway observado, ventana **SA/FE** (misma fórmula ADR-038 que weekday) | NULL si sample &lt; 20 · replicado por línea |
+| `freq_sample_size_weekday` | int | Nº observaciones válidas line·LA (definición §10 / ADR-038) | Replicado por línea |
+| `freq_sample_size_weekend` | int | Nº observaciones válidas line·SA/FE (definición §10 / ADR-038) | Replicado por línea |
 | `alert_active` | boolean | `silver_alerts` period vs **now** en ensamblado | NOT NULL |
 | `alert_header` | string | `silver_alerts` | NULL si inactivo |
 | `alert_cause` | string | `silver_alerts` | NULL si inactivo |
@@ -419,7 +425,7 @@ Una fila por combinación in-scope·paso S1 alineado, con o sin bus. Sin filas d
 
 **Contrato `alert_*`:** atributo a nivel `line_id` **replicado** en cada fila stop×direction. No es incidencia por parada. Prohibido join por RT `stop_id`. **Fuente única:** `silver_alerts` (no re-parsear Bronze en el job de Gold para alerts).
 
-**Contrato `freq_*`:** grain de agregación = **`line_id` + ventana**. No por stop×direction. **Mismo valor replicado** en todas las filas Gold del mismo `line_id`. Fuente: historial `silver_arrives`.
+**Contrato `freq_*`:** grain de agregación Gold = **`line_id` + ventana**. No por stop×direction en la columna final. **Mismo valor replicado** en todas las filas Gold del mismo `line_id`. Fuente: historial `silver_arrives`. Fórmula (weekday y weekend idéntica salvo la ventana): observaciones de paso de bus en stop×line×direction → gaps [1,60] min → mediana por línea ([ADR-038](adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md)).
 
 **Deduplicación:** MERGE on PK.
 
@@ -458,14 +464,15 @@ Orientación no vinculante para quien monte el Semantic sobre Gold:
 
 ## 10. Reglas de negocio — US-08 (frecuencia observada)
 
-([ADR-012](adr/ADR-012-frequency-sot-is-observed-silver-polls-with-no-planned-fallb.md), [ADR-024](adr/ADR-024-observed-frequency-aggregation-grain-is-line-id-plus-day-typ.md), [ADR-025](adr/ADR-025-observed-headway-formula-is-median-of-successive-gaps-in-min.md), [ADR-030](adr/ADR-030-frequency-response-gate-20-observations-preferred-24h-warmup.md))
+([ADR-012](adr/ADR-012-frequency-sot-is-observed-silver-polls-with-no-planned-fallb.md), [ADR-024](adr/ADR-024-observed-frequency-aggregation-grain-is-line-id-plus-day-typ.md), [ADR-025](adr/ADR-025-observed-headway-formula-is-median-of-successive-gaps-in-min.md), [ADR-038](adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md), [ADR-030](adr/ADR-030-frequency-response-gate-20-observations-preferred-24h-warmup.md))
 
 **Decisión cerrada:** frecuencia = agregación del historial real de `silver_arrives`. Nunca GTFS planificado ni Frequency* de EMT. Sin historial suficiente → US-04 ("no lo sé"), sin fallback silencioso.
 
-- Solo `silver_arrives` con `bus_id IS NOT NULL` cuenta como observación válida. Mismo poll bucket·mismo `bus_id` = 1 vez.
-- Grain de agregación: **`line_id` + ventana** (weekday=`LA`, weekend=`SA`\|`FE`).
-- Fórmula: timestamps válidos ordenados → **mediana** de intervalos consecutivos (min) → `freq_observed_*_min`.
-- Sample de la ventana **&lt; 20** → ese `freq_observed_*` = NULL.
+- Fila silver candidata: `bus_id IS NOT NULL`, `map_ok=true`, `direction_id` presente. Mismo poll·mismo `bus_id` en el mismo stop×line×direction = 1 fila.
+- **Observación (headway / sample_size):** primera vez que ese bus se ve en una **visita** en `stop_id`×`line_id`×`direction_id`×ventana. Nueva visita = primera vista, o misma bus desapareció **≥ 20 min** y vuelve ([ADR-038](adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md)). Mismo `bus_id` cada 2 min en la misma visita = **1** observación; `bus_id` distintos = observaciones distintas.
+- Grain de agregación Gold: **`line_id` + ventana** (weekday=`LA`, weekend=`SA`\|`FE`). Gaps dentro de stop×line×direction; luego pool a la línea.
+- Fórmula: observaciones ordenadas → intervalos en **[1, 60] min** → **mediana** por `line_id`×ventana → `freq_observed_*_min`.
+- `freq_sample_size_*` = nº de **esas observaciones**. **&lt; 20** → ese `freq_observed_*` = NULL.
 - Warm-up operativo recomendado **24h**. Gate de respuesta: prioridad a **20 muestras**.
 - Agent: si no se indica día → elegir ventana con `day_type`; si se dice “laborable/fin de semana” → columna correspondiente.
 

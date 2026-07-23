@@ -1,6 +1,6 @@
-# 수동 적재 가이드 — Lakehouse + Notebook · **contract v4.3** · **쌩 복붙**
+# 수동 적재 가이드 — Lakehouse + Notebook · **contract v4.3.1** · **쌩 복붙**
 
-**계약:** [`data-source-contract-v4.md`](./data-source-contract-v4.md) (v4.3)  
+**계약:** [`data-source-contract-v4.md`](./data-source-contract-v4.md) (v4.3.1)  
 **방식:** Fabric UI에 노트북 **전체 붙여넣기**. Environment / Git sync 없음.  
 **목표:** `gold_emt_stop_line` 유지·갱신. Arrives / alerts **분리** Pipeline.
 
@@ -106,7 +106,8 @@ Fabric에서 **먼저** 갱신된 [`nb_create_tables.py`](../notebooks/nb_create
 
 - [ ] create/migrate Run → `silver_arrives` 건수 = 옛 `silver_emt`, `silver_alerts` 존재  
 - [ ] `silver_emt` 없음  
-- [ ] bootstrap / poll / **alerts** 노트북 v4.3 복붙·저장  
+- [ ] bootstrap / poll / **alerts** 노트북 v4.3.1 복붙·저장  
+  (`nb_poll_and_transform` freq = ADR-038; 스키마 변경 없음 → poll 한 번이면 gold `freq_*` 갱신)  
 - [ ] arrives Pipeline 1회 성공 (`alert_*` 기존 값 유지)  
 - [ ] alerts Pipeline 1회 성공 (`silver_alerts` > 0, gold `alert_active` 스모크)  
 - [ ] Agent gold 스모크 (ETA + US-07)  

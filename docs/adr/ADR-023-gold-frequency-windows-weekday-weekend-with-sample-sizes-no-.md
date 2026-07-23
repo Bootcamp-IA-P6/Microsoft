@@ -28,3 +28,4 @@ Adopt **B**. Columns: `freq_observed_weekday_min`, `freq_observed_weekend_min`, 
 
 - History: User first argued sample_size could be queried ad hoc / via Semantic; then accepted Gold columns because Fabric Data Agent is Gold(+Semantic)-centric and Semantic is not in scope yet.
 - `freq_window_desc` considered then rejected in favor of `day_type` enum.
+- What counts as one observación clarified by [ADR-038](ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md): visit first-seen at stop×line×direction (not every repeated poll of the same bus).
