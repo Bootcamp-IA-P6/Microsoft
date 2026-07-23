@@ -93,7 +93,7 @@ Base = **Phase 0** (v4.3 tables, arrives + alerts notebooks).
 
 - [x] Reduce Spark jobs (skip pipeline `count`/`display` unless `verbose_display`)
 - [x] Remove unnecessary `collect()` (gold = latest poll join only; no full `silver_arrives` collect)
-- [x] Freq: Spark lag for gaps + **exact** `statistics.median` on gap values (Phase 0 parity)
+- [x] Freq: visit first-seen observations via Spark ([ADR-038](adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md)); exact `statistics.median` on gap values
 - [x] Incremental cutoff = one agg instead of two
 - [x] Timing logs: `[phase1 timing] HTTP …` vs transform laps (separate wall-clock drivers)
 - [x] Fix silver append path: `cache` → `count` → `write` (no `take`+`write` double join)
