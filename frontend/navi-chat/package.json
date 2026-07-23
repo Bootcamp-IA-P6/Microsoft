@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "template": {
-    "name": "blankapp",
-    "displayName": "Blank App",
+    "name": "NAVI",
+    "displayName": "NAVI - Asistente inteligente de movilidad",
     "description": "Bare-bones Fabric-authenticated React + Vite app — sign-in, routing, and a placeholder home page, with no data layer to remove"
   },
   "scripts": {

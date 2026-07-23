@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable", "ESNext.Decorators"],
     "jsx": "react-jsx",

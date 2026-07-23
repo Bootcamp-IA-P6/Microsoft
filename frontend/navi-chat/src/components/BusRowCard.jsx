@@ -1,4 +1,5 @@
 import StatusBadge from './StatusBadge';
+import { useTranslation } from '../context/LanguageContext';
 
 function minutesFromSeconds(seconds) {
   if (seconds == null) return null;
@@ -6,16 +7,15 @@ function minutesFromSeconds(seconds) {
 }
 
 // BusRowCard: renderiza UNA fila con la forma de gold_emt_stop_line.
-// Sigue el "Tratamiento de NULL" del contrato §8 al pie de la letra:
-//   - sin bus -> eta_* NULL, has_upcoming_bus=false
-//   - alert_active=false -> textos alert NULL
-//   - freq NULL -> "no tengo ese dato todavía" (nunca inventar)
+// Sigue el "Tratamiento de NULL" del contrato §8: sin bus -> eta_* NULL;
+// alert_active=false -> textos alert NULL; freq NULL -> "no tengo ese dato".
 export default function BusRowCard({ row }) {
+  const { t } = useTranslation();
   const min1 = minutesFromSeconds(row.eta_seconds_1);
   const min2 = minutesFromSeconds(row.eta_seconds_2);
 
   return (
-    <article className="bus-row-card" aria-label={`Línea ${row.line_label}, ${row.stop_name}`}>
+    <article className="bus-row-card" aria-label={`${row.line_label}, ${row.stop_name}`}>
       <header className="bus-row-card__header">
         <span className="bus-row-card__line" aria-hidden="true">
           {row.line_label}
@@ -36,14 +36,9 @@ export default function BusRowCard({ row }) {
 
       {row.has_upcoming_bus ? (
         <p className="bus-row-card__eta">
-          <StatusBadge kind="busLlegando">
-            Próximo bus en {min1} min
-          </StatusBadge>
+          <StatusBadge kind="busLlegando">{t('nextBusIn', min1)}</StatusBadge>
           {min2 != null && (
-            <span className="bus-row-card__eta-secondary">
-              {' '}
-              · siguiente en {min2} min
-            </span>
+            <span className="bus-row-card__eta-secondary"> · {t('nextAfter', min2)}</span>
           )}
         </p>
       ) : (
@@ -59,7 +54,7 @@ export default function BusRowCard({ row }) {
             <>
               {' '}
               <a href={row.alert_url} target="_blank" rel="noreferrer">
-                Más información
+                {t('moreInfo')}
               </a>
             </>
           )}
@@ -67,10 +62,10 @@ export default function BusRowCard({ row }) {
       )}
 
       <p className="bus-row-card__freq">
-        Frecuencia laborable:{' '}
+        {t('freqWeekday')}:{' '}
         {row.freq_observed_weekday_min != null
-          ? `cada ${row.freq_observed_weekday_min} min`
-          : 'todavía no tengo ese dato'}
+          ? t('freqEvery', row.freq_observed_weekday_min)
+          : t('freqUnknown')}
       </p>
     </article>
   );
