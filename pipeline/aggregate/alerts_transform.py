@@ -1,7 +1,10 @@
 """Alerts bronze payload → silver_alerts (latest-only) → gold alert_* MERGE."""
 from __future__ import annotations
 
+import json
 from datetime import datetime
+
+from pyspark.sql import functions as F
 
 from pipeline.aggregate.alerts_project import known_line_ids, project_gold_alerts
 from pipeline.common.datetime_utils import MADRID, UTC
@@ -15,15 +18,41 @@ from pipeline.transform.alerts_normalize import expand_silver_rows
 from pipeline.validation.schema import GOLD_ALERT_STAGE_SCHEMA, SILVER_ALERTS_SCHEMA
 
 
+def load_latest_servicealerts_payload(
+    spark, *, bronze_table: str = BRONZE_TABLE
+) -> dict:
+    """Read newest bronze servicealerts JSON (Phase 3: transform does not call HTTP)."""
+    if not spark.catalog.tableExists(bronze_table):
+        raise RuntimeError(f"{bronze_table} missing")
+    rows = (
+        spark.table(bronze_table)
+        .filter("resource_kind = 'servicealerts'")
+        .orderBy(F.col("ingested_at").desc())
+        .limit(1)
+        .collect()
+    )
+    if not rows:
+        raise RuntimeError(
+            f"No servicealerts rows in {bronze_table} — run alerts ingest first"
+        )
+    raw = rows[0]["payload"]
+    if isinstance(raw, str):
+        return json.loads(raw)
+    raise RuntimeError("bronze servicealerts payload is not a JSON string")
+
+
 def run_alerts_transform(
     spark,
-    payload: dict,
+    payload: dict | None = None,
     *,
     silver_alerts_table: str = SILVER_ALERTS,
     gold_table: str = GOLD_TABLE,
     bronze_table: str = BRONZE_TABLE,
     verbose_display: bool = False,
 ) -> None:
+    if payload is None:
+        payload = load_latest_servicealerts_payload(spark, bronze_table=bronze_table)
+
     if not spark.catalog.tableExists(silver_alerts_table):
         raise RuntimeError(f"{silver_alerts_table} missing — run nb_create_tables")
 
@@ -93,5 +122,5 @@ def run_alerts_transform(
             f"{spark.table(gold_table).filter('alert_active = true').count()}"
         )
     else:
-        print("=== SUMMARY (contract v4.3 alerts · phase2) ===")
+        print("=== SUMMARY (contract v4.3 alerts · phase3) ===")
         print(f"stage_lines={len(stage)} verbose_display=False")

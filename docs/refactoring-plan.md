@@ -209,9 +209,18 @@ Do **not** merge arrives + alerts into one Gold overwrite that resets the other 
 
 ## Goal
 
-Remove **external API** calls from Spark.
+Remove **external API** calls from the Spark **transform** hot path.
 
-Spark starts from Bronze (or a landing path), not from EMT/GTFS-RT HTTP.
+Spark starts from Bronze, not from EMT/GTFS-RT HTTP.
+
+## Status (repo)
+
+- [x] Split orchestrators: `run_arrives_ingest` / `run_arrives_transform`, `run_alerts_ingest_only` / `run_alerts_transform_only`
+- [x] Alerts transform can reload latest bronze `servicealerts` payload (no in-session HTTP required)
+- [x] Notebooks: `nb_ingest_*` + `nb_transform_*` (combined notebooks kept as fallback)
+- [x] Docs: manual guide Phase 3 topology
+- [ ] Fabric: rewire Pipelines to ingest → transform
+- [ ] Optional later: replace ingest notebooks with Fabric User Data Function
 
 ## Current (Phase 0–2)
 
@@ -219,27 +228,36 @@ Spark starts from Bronze (or a landing path), not from EMT/GTFS-RT HTTP.
 Notebook → Spark → EMT / GTFS-RT API → Bronze → Silver → Gold
 ```
 
-## Target
+## Target (Phase 3 POC)
 
 ```text
 Fabric Pipeline
-  → User Data Function (or equivalent)
-      → S1 arrives and/or S2 servicealerts
-      → Bronze (or Eventstream → Bronze)
-  → Spark (or later RTI)
-      → silver_arrives / silver_alerts → gold_*
+  → nb_ingest_arrives / nb_ingest_alerts   # HTTP → bronze (UDF-equivalent for now)
+  → nb_transform_arrives / nb_transform_alerts  # Spark: bronze → silver → gold (no HTTP)
 ```
 
-Keep **two ingestion cadences** conceptually:
+Aspirational:
+
+```text
+Fabric Pipeline
+  → User Data Function
+      → S1 / S2 → Bronze
+  → Spark transform only
+      → silver_* → gold_*
+```
+
+Keep **two ingestion cadences**:
 
 - Arrives ~60s (POC may be slower)
 - Alerts ~300s
 
 ## Benefits
 
-- Spark independent of external I/O / SSL flakiness on the hot path
-- Reusable ingestion
+- Spark transform independent of external I/O / SSL flakiness
+- Reusable ingestion entrypoints
 - Ready for Eventstream (Phase 4)
+
+**Schema:** unchanged (v4.3.1).
 
 ---
 
@@ -317,8 +335,9 @@ Lakehouse Phase 0–2 remains the rollback and Agent-proven path until Phase 4 i
 
 ## Phase 3
 
-- Spark no longer calls external APIs on the hot path
-- Clear separation ingestion vs transform
+- Spark **transform** no longer calls external APIs on the hot path
+- Clear separation ingestion vs transform (notebooks + orchestrators)
+- Combined notebooks optional fallback only
 
 ## Phase 4
 
