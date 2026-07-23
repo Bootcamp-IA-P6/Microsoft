@@ -62,6 +62,7 @@ Pipeline(s) → Notebook(s) → Spark → Lakehouse tables (v4.3)
 - [x] Arrives Gold MERGE does **not** clear `alert_*`
 - [x] `nb_alerts_silver_gold` (full S2 → silver_alerts → gold `alert_*`)
 - [x] Ops guide lists both recurring notebooks / schedules
+- [x] Freq headway = visit first-seen observations ([ADR-038](./adr/ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md)); contract v4.3.1
 
 SoT paste notebooks: `notebooks/nb_*.py` · guide: [manual-lakehouse-ingestion.md](./manual-lakehouse-ingestion.md)
 

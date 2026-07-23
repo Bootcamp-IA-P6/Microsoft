@@ -26,4 +26,4 @@ Adopt **B** (OPEN-4 acceptance).
 
 ## 5. Amended / Superseded by
 
-- None at time of writing.
+- Observation grain clarified by [ADR-038](ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md) (visit first-seen at stop×line×direction; not line-pooled poll timestamps). Median-of-gaps decision here remains.
