@@ -18,8 +18,8 @@ Decisions from the EMT Madrid Fabric medallion schema conversation (2026-07-20).
 | [ADR-012](ADR-012-frequency-sot-is-observed-silver-polls-with-no-planned-fallb.md) | Frequency SoT is observed Silver polls with no planned fallback | Accepted |
 | [ADR-013](ADR-013-stop-search-catalog-gtfs-primary-with-emt-name-enrichment.md) | Stop search catalog: GTFS primary with EMT name enrichment | Accepted |
 | [ADR-014](ADR-014-ask-back-rules-for-missing-direction-and-ambiguous-place-nam.md) | Ask-back rules for missing direction and ambiguous place names | Accepted |
-| [ADR-015](ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) | Medallion physical schema: one Bronze, one Silver, one Gold table | Accepted |
-| [ADR-016](ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md) | Silver is append-only poll fact wide rows not polymorphic record_type | Accepted |
+| [ADR-015](ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) | Medallion physical schema: Bronze one, Silver per domain, Gold one | Accepted (amended) |
+| [ADR-016](ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md) | silver_arrives is append-only poll fact wide rows not polymorphic record_type | Accepted (amended) |
 | [ADR-017](ADR-017-bronze-holds-rest-and-rt-payloads-only-gtfs-bootstraps-silve.md) | Bronze holds REST and RT payloads only; GTFS bootstraps Silver | Accepted |
 | [ADR-018](ADR-018-bronze-contract-uuid-ingest-id-and-no-enforced-column-types.md) | Bronze contract: UUID ingest_id and no enforced column types | Accepted |
 | [ADR-019](ADR-019-direction-grain-key-is-direction-id-only.md) | Direction grain key is direction_id only | Accepted |
@@ -30,7 +30,7 @@ Decisions from the EMT Madrid Fabric medallion schema conversation (2026-07-20).
 | [ADR-024](ADR-024-observed-frequency-aggregation-grain-is-line-id-plus-day-typ.md) | Observed frequency aggregation grain is line_id plus day-type window | Accepted |
 | [ADR-025](ADR-025-observed-headway-formula-is-median-of-successive-gaps-in-min.md) | Observed headway formula is median of successive gaps in minutes | Accepted |
 | [ADR-026](ADR-026-map-arrive-destination-to-direction-id-require-path-mapping-.md) | Map Arrive destination to direction_id; require path mapping at seed | Accepted |
-| [ADR-027](ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md) | Alerts denormalized onto Gold rows at line grain under one-table rule | Accepted |
+| [ADR-027](ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md) | Alerts denormalized onto Gold rows at line grain | Accepted (amended) |
 | [ADR-028](ADR-028-freshness-is-stale-after-180-seconds-no-gold-in-scope-column.md) | Freshness is_stale after 180 seconds; no Gold in_scope column | Accepted |
 | [ADR-029](ADR-029-polling-cadences-arrives-60s-try-and-adjust-rt-300s.md) | Polling cadences: arrives ~60s try-and-adjust; RT 300s | Accepted |
 | [ADR-030](ADR-030-frequency-response-gate-20-observations-preferred-24h-warmup.md) | Frequency response gate: 20 observations preferred; 24h warmup guide | Accepted |
@@ -40,5 +40,6 @@ Decisions from the EMT Madrid Fabric medallion schema conversation (2026-07-20).
 | [ADR-034](ADR-034-documentation-language-team-agreement-not-stakeholder-approv.md) | Documentation language: team agreement not stakeholder-approval theater | Accepted |
 | [ADR-035](ADR-035-verification-plan-v2-is-fixed-results-go-to-reports-not-plan.md) | Verification plan v2 is fixed; results go to reports not plan edits | Accepted |
 | [ADR-036](ADR-036-no-peak-or-off-peak-labels-no-daily-total-vehicle-counts-in-.md) | No peak or off-peak labels; no daily total vehicle counts in scope | Accepted |
+| [ADR-037](ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md) | Silver split into silver_arrives and silver_alerts | Accepted |
 
 Author on all records: **Mirae Kang**.
