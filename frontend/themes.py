@@ -10,7 +10,7 @@ Nombre de la app en un solo sitio — cámbialo aquí si "ParaBus" no convence.
 """
 
 APP_TITLE = "NAVI"
-APP_TAGLINE = "Tu copiloto de movilidad"
+APP_TAGLINE = "Tu asistente de movilidad inteligente"
 APP_USAGE = "Pregunta cuándo llega tu autobús en el centro de Madrid"
 
 THEMES = {
