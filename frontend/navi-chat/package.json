@@ -24,6 +24,7 @@
     "@microsoft/rayfin-client": "^1.33.2",
     "@microsoft/rayfin-core": "^1.33.2",
     "@microsoft/rayfin-data": "^1.33.2",
+    "@microsoft/rayfin-mcp": "^1.33.2",
     "@tailwindcss/vite": "^4.1.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
