@@ -7,7 +7,6 @@ import uuid
 
 from pipeline.common.datetime_utils import utc_now_iso_z
 from pipeline.config.constants import BRONZE_TABLE, TZ_NOTE
-from pipeline.validation.schema import BRONZE_SCHEMA
 
 
 def bronze_row(
@@ -53,6 +52,9 @@ def bronze_row_alerts(http_status: int, payload_obj: dict) -> dict:
 def append_bronze_rows(spark, rows: list[dict], *, table: str = BRONZE_TABLE) -> int:
     if not rows:
         return 0
+    # Lazy: keeps bronze_row* usable without pyspark (Phase 4 / UDF).
+    from pipeline.validation.schema import BRONZE_SCHEMA
+
     spark.createDataFrame(rows, schema=BRONZE_SCHEMA).write.format("delta").mode(
         "append"
     ).saveAsTable(table)

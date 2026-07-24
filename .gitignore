@@ -29,6 +29,9 @@ __pycache__/
 # Logs locales
 *.log
 
+# Phase 4 local emit output
+rti/out/
+
 # Generated API sample responses (run: python3 scripts/fetch_emt_samples.py)
 samples/
 

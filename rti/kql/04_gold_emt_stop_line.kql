@@ -1,0 +1,120 @@
+// =============================================================================
+// 04 — gold_emt_stop_line
+// Arrives ETA from silver_arrives (latest poll); alerts from silver_alerts_latest
+// Ownership: ETA path must NOT clear alert_*; alert path must NOT clear ETA
+// =============================================================================
+
+.create-merge table gold_emt_stop_line (
+    stop_id: string,
+    line_id: string,
+    direction_id: int,
+    line_label: string,
+    stop_name: string,
+    direction_text: string,
+    name_a: string,
+    name_b: string,
+    destination: string,
+    eta_seconds_1: int,
+    bus_id_1: string,
+    eta_seconds_2: int,
+    bus_id_2: string,
+    has_upcoming_bus: bool,
+    is_stale: bool,
+    origin_stop_notice: bool,
+    is_terminus: bool,
+    catalog_loaded_at: datetime,
+    day_type: string,
+    updated_at: datetime,
+    freq_observed_weekday_min: real,
+    freq_observed_weekend_min: real,
+    freq_sample_size_weekday: int,
+    freq_sample_size_weekend: int,
+    alert_active: bool,
+    alert_header: string,
+    alert_cause: string,
+    alert_effect: string,
+    alert_url: string
+)
+
+// --- Arrives gold stage (ETA only) — run on schedule / after silver ingest ---
+// Stale: 900s matches Lakehouse notebook default (contract ADR-028 = 180; align at cutover)
+.create-or-alter function with (folder = "emt") gold_arrives_stage(stale_after_sec: long = 900) {
+    let latest_poll =
+        silver_arrives
+        | where map_ok == true and isnotnull(direction_id)
+        | summarize max_poll = max(datetime_polling) by stop_id, line_id, direction_id;
+    let facts =
+        silver_arrives
+        | where map_ok == true and isnotnull(direction_id)
+        | lookup kind=inner latest_poll on stop_id, line_id, direction_id
+        | where datetime_polling == max_poll;
+    let ranked =
+        facts
+        | where isnotnull(eta_seconds)
+        | serialize
+        | sort by stop_id asc, line_id asc, direction_id asc, eta_seconds asc
+        | extend rn = row_number(1, prev(stop_id) != stop_id or prev(line_id) != line_id or prev(direction_id) != direction_id);
+    let eta1 = ranked | where rn == 1 | project stop_id, line_id, direction_id, eta_seconds_1=eta_seconds, bus_id_1=bus_id, destination;
+    let eta2 = ranked | where rn == 2 | project stop_id, line_id, direction_id, eta_seconds_2=eta_seconds, bus_id_2=bus_id;
+    facts
+    | summarize
+        take_any(line_label), take_any(stop_name), take_any(direction_text),
+        take_any(name_a), take_any(name_b), take_any(is_terminus),
+        take_any(catalog_loaded_at), take_any(day_type),
+        updated_at = max(datetime_polling)
+        by stop_id, line_id, direction_id
+    | lookup kind=leftouter eta1 on stop_id, line_id, direction_id
+    | lookup kind=leftouter eta2 on stop_id, line_id, direction_id
+    | extend
+        has_upcoming_bus = isnotnull(eta_seconds_1),
+        is_stale = datetime_diff('second', now(), updated_at) > stale_after_sec,
+        origin_stop_notice = is_terminus and isnull(eta_seconds_1)
+}
+
+// --- Alerts stage by line_id (active window + lowest alert_id) ---
+.create-or-alter function with (folder = "emt") gold_alerts_stage() {
+    let now_u = now();
+    silver_alerts_latest()
+    | where map_ok == true and isnotempty(line_id)
+    | where (isnull(active_period_start) or now_u >= active_period_start)
+        and (isnull(active_period_end) or now_u < active_period_end)
+    | summarize arg_min(alert_id, *) by line_id
+    | project line_id, alert_active=true, alert_header, alert_cause, alert_effect, alert_url
+}
+
+// --- Full gold rebuild: preserves ownership by composing stages ---
+// Run after arrives and/or alerts silver land (Pipeline KQL activity or timer).
+// .set-or-replace gold_emt_stop_line <|
+.create-or-alter function with (folder = "emt") gold_emt_stop_line_build(stale_after_sec: long = 900) {
+    let arrives = gold_arrives_stage(stale_after_sec);
+    let alerts = gold_alerts_stage();
+    let lines = arrives | distinct line_id;
+    let alert_fill =
+        lines
+        | lookup kind=leftouter alerts on line_id
+        | extend
+            alert_active = coalesce(alert_active, false),
+            alert_header = iff(coalesce(alert_active, false), alert_header, ""),
+            alert_cause = iff(coalesce(alert_active, false), alert_cause, ""),
+            alert_effect = iff(coalesce(alert_active, false), alert_effect, ""),
+            alert_url = iff(coalesce(alert_active, false), alert_url, "");
+    arrives
+    | lookup kind=leftouter alert_fill on line_id
+    // freq_* filled by 05_freq job (left null until then)
+    | extend
+        freq_observed_weekday_min = real(null),
+        freq_observed_weekend_min = real(null),
+        freq_sample_size_weekday = int(null),
+        freq_sample_size_weekend = int(null)
+    | project
+        stop_id, line_id, direction_id, line_label, stop_name, direction_text, name_a, name_b,
+        destination, eta_seconds_1, bus_id_1, eta_seconds_2, bus_id_2,
+        has_upcoming_bus, is_stale, origin_stop_notice, is_terminus,
+        catalog_loaded_at, day_type, updated_at,
+        freq_observed_weekday_min, freq_observed_weekend_min,
+        freq_sample_size_weekday, freq_sample_size_weekend,
+        alert_active, alert_header, alert_cause, alert_effect, alert_url
+}
+
+// Apply:
+// .set-or-replace gold_emt_stop_line <| gold_emt_stop_line_build(900)

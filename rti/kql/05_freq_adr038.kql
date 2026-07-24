@@ -1,0 +1,59 @@
+// =============================================================================
+// 05 — ADR-038 frequency → patch gold freq_* by line_id
+// Lakehouse SoT: pipeline/aggregate/frequency.py
+// Visit break 20m; gaps [1,60]m; median by line×weekday/weekend; gate n<20 → null
+// =============================================================================
+
+.create-or-alter function with (folder = "emt") freq_by_line_adr038(freq_min: long = 20) {
+    let polls =
+        silver_arrives
+        | where isnotempty(bus_id) and map_ok == true and day_type in ("LA","SA","FE") and isnotnull(direction_id)
+        | distinct stop_id, line_id, direction_id, bus_id, datetime_polling, day_type
+        | extend window = iff(day_type == "LA", "weekday", "weekend");
+    let ordered =
+        polls
+        | sort by stop_id asc, line_id asc, direction_id asc, bus_id asc, window asc, datetime_polling asc
+        | extend prev_ts = prev(datetime_polling, 1),
+                 prev_bus = prev(bus_id, 1),
+                 prev_stop = prev(stop_id, 1),
+                 prev_line = prev(line_id, 1),
+                 prev_dir = prev(direction_id, 1),
+                 prev_win = prev(window, 1);
+    let observations =
+        ordered
+        | extend same_bus = prev_bus == bus_id and prev_stop == stop_id and prev_line == line_id
+            and prev_dir == direction_id and prev_win == window
+        | extend gap_same = datetime_diff('minute', datetime_polling, prev_ts)
+        | where isnull(prev_ts) or not(same_bus) or gap_same >= 20
+        | project stop_id, line_id, direction_id, window, obs_ts = datetime_polling;
+    let gaps =
+        observations
+        | sort by stop_id asc, line_id asc, direction_id asc, window asc, obs_ts asc
+        | extend prev_obs = prev(obs_ts, 1),
+                 p_stop = prev(stop_id, 1), p_line = prev(line_id, 1),
+                 p_dir = prev(direction_id, 1), p_win = prev(window, 1)
+        | where p_stop == stop_id and p_line == line_id and p_dir == direction_id and p_win == window
+        | extend gap_min = datetime_diff('minute', obs_ts, prev_obs) * 1.0
+        | where gap_min >= 1 and gap_min <= 60
+        | project line_id, window, gap_min;
+    let med =
+        gaps
+        | summarize freq = percentile(gap_min, 50) by line_id, window;
+    let nobs =
+        observations
+        | summarize sample_n = count() by line_id, window;
+    med
+    | lookup kind=leftouter nobs on line_id, window
+    | extend freq = iff(sample_n < freq_min, real(null), freq)
+    | evaluate pivot(window, any(freq), any(sample_n))
+}
+
+// After gold_emt_stop_line_build, patch freq (example — adjust column names after pivot):
+// let f = freq_by_line_adr038(20);
+// .set-or-replace gold_emt_stop_line <|
+//   gold_emt_stop_line
+//   | lookup kind=leftouter f on line_id
+//   | extend freq_observed_weekday_min = coalesce(weekday_freq, freq_observed_weekday_min), ...
+//
+// NOTE: pivot column names vary; validate with `freq_by_line_adr038(20)` output then wire patch.
+// If KQL prev() partitioning is fragile, keep Lakehouse freq job writing into EH via UDF gold patch until validated.

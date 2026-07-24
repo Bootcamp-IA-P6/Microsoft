@@ -1,0 +1,10 @@
+// =============================================================================
+// 06 — Apply gold (run on timer ~60s after arrives / after alerts)
+// =============================================================================
+
+.set-or-replace gold_emt_stop_line <| gold_emt_stop_line_build(900)
+
+// Smoke:
+// gold_emt_stop_line | take 20
+// gold_emt_stop_line | where alert_active == true | take 20
+// gold_emt_stop_line | summarize count() by is_stale

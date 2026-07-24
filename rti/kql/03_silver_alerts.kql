@@ -1,0 +1,42 @@
+// =============================================================================
+// 03 — silver_alerts (UDF emits full snapshot rows each poll)
+// Latest semantics: use silver_alerts_latest() or .set-or-replace after each poll
+// =============================================================================
+
+.create-merge table silver_alerts (
+    emt_record: string,
+    _rk: string,
+    alert_id: string,
+    line_id: string,
+    alert_header: string,
+    alert_cause: string,
+    alert_effect: string,
+    alert_url: string,
+    active_period_start: datetime,
+    active_period_end: datetime,
+    snapshot_at: datetime,
+    ingested_at: datetime,
+    map_ok: bool
+)
+
+.create-or-alter table silver_alerts ingestion json mapping 'silver_alerts_json'
+'['
+'  {"column":"emt_record","path":"$.emt_record"},'
+'  {"column":"_rk","path":"$._rk"},'
+'  {"column":"alert_id","path":"$.alert_id"},'
+'  {"column":"line_id","path":"$.line_id"},'
+'  {"column":"alert_header","path":"$.alert_header"},'
+'  {"column":"alert_cause","path":"$.alert_cause"},'
+'  {"column":"alert_effect","path":"$.alert_effect"},'
+'  {"column":"alert_url","path":"$.alert_url"},'
+'  {"column":"active_period_start","path":"$.active_period_start"},'
+'  {"column":"active_period_end","path":"$.active_period_end"},'
+'  {"column":"snapshot_at","path":"$.snapshot_at"},'
+'  {"column":"ingested_at","path":"$.ingested_at"},'
+'  {"column":"map_ok","path":"$.map_ok"}'
+']'
+
+.create-or-alter function with (folder = "emt") silver_alerts_latest() {
+    silver_alerts
+    | where snapshot_at == toscalar(silver_alerts | summarize max(snapshot_at))
+}

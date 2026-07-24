@@ -1,0 +1,35 @@
+// =============================================================================
+// 01 — bronze_emt_raw (Eventstream destination)
+// Run once in Eventhouse DB db_emt
+// =============================================================================
+
+.create-merge table bronze_emt_raw (
+    emt_record: string,
+    ingest_id: string,
+    ingested_at: datetime,
+    source_system: string,
+    resource_kind: string,
+    resource_key: string,
+    http_status: string,
+    api_code: string,
+    api_description: string,
+    payload: string,
+    content_sha256: string,
+    timezone_note: string
+)
+
+.create-or-alter table bronze_emt_raw ingestion json mapping 'bronze_emt_raw_json'
+'['
+'  {"column":"emt_record","path":"$.emt_record"},'
+'  {"column":"ingest_id","path":"$.ingest_id"},'
+'  {"column":"ingested_at","path":"$.ingested_at"},'
+'  {"column":"source_system","path":"$.source_system"},'
+'  {"column":"resource_kind","path":"$.resource_kind"},'
+'  {"column":"resource_key","path":"$.resource_key"},'
+'  {"column":"http_status","path":"$.http_status"},'
+'  {"column":"api_code","path":"$.api_code"},'
+'  {"column":"api_description","path":"$.api_description"},'
+'  {"column":"payload","path":"$.payload"},'
+'  {"column":"content_sha256","path":"$.content_sha256"},'
+'  {"column":"timezone_note","path":"$.timezone_note"}'
+']'

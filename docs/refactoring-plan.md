@@ -277,13 +277,15 @@ Business logic stays conceptually the same; engine changes.
 
 ## Status
 
-- [ ] Decide Eventhouse / Eventstream workspace objects (names, retention)
-- [ ] Ingest: UDF (or non-Spark poller) → Eventstream → EH bronze-equivalent
-- [ ] Map `pipeline/` domains to KQL / MVs (see table below)
-- [ ] Gold serving grain = today’s `gold_emt_stop_line` (Agent-compatible)
-- [ ] Keep arrives vs alerts column ownership (no cross-wipe)
-- [ ] Dual-run / cutover plan vs Lakehouse gold
-- [ ] Agent rebind smoke (ETA + US-07 alerts + US-08 freq)
+See [phase4-rti.md](./phase4-rti.md). **Push only when asked.**
+
+- [x] UDF poll + silver expand (`poll_arrives_scope`, `poll_alerts_scope`) — smoke OK (`bronze`/`silver`/`fails=0`)
+- [x] Eventhouse DDL + gold KQL (`rti/kql/01`–`06`)
+- [x] UDF connections + Eventstream CONNs (aliases `lhemtmadrid` / `varemtmadrid`)
+- [x] Bootstrap remains Lakehouse daily
+- [ ] Gold apply on schedule (`.set-or-replace gold_emt_stop_line`)
+- [ ] Full-scope arrives batches + Pipeline
+- [ ] Dual-run / Agent rebind; ADR-038 KQL validate
 
 ## Target sketch
 
