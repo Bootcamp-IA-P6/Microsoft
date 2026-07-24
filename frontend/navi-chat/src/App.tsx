@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ChatWindow from './components/ChatWindow';
 import NaviMascot from './components/NaviMascot';
-import VoiceInputButton from './components/VoiceInputButton';
+import VoiceInputButton, { SendIcon } from './components/VoiceInputButton';
 import { AccessibilityProvider, useAccessibility } from './context/AccessibilityContext';
 import { LanguageProvider, useTranslation } from './context/LanguageContext';
 import { SUPPORTED_LANGUAGES } from './i18n/translations';
@@ -22,6 +22,13 @@ function AppShell() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const conversationRef = useRef<HTMLDivElement | null>(null);
+  const [openSettings, setOpenSettings] = useState(false);
+
+  useEffect(() => {
+    const el = conversationRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, isLoading]);
 
   const themeLabel = theme === 'dark' ? t('themeDark') : t('themeHighContrast');
   const fontLabel = fontSize === 'large' ? t('fontSizeLarge') : t('fontSizeNormal');
@@ -63,12 +70,12 @@ function AppShell() {
     }
   }
 
-  function handleSubmit(event) {
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     sendQuestion(input.trim());
   }
 
-  function handleVoiceResult(transcript) {
+  function handleVoiceResult(transcript: string) {
     sendQuestion(transcript.trim());
   }
 
@@ -78,112 +85,159 @@ function AppShell() {
     { label: t('quickActionRoadworks'), prompt: t('quickActionPromptRoadworks') },
   ];
 
+  const hasMessages = messages.length > 0 || isLoading;
+
   return (
     <div className="app">
-      <div className="app__panel">
-        <a href="#main-content" className="skip-link">
-          {t('skipLink')}
-        </a>
-
-        <header className="app__topbar">
+      {/* Navbar: ahora es un hermano de .app__panel, no vive adentro —
+          ancho completo, fija arriba, independiente de si el chat crece. */}
+      <header className="app__navbar">
+        <div className="app__brand">
+          <img src="/icon-navi.svg" alt="" className="app__brand-icon" />
           <div className="app__brand-text">
             <h1 className="app__brand-name">NAVI</h1>
             <p className="app__brand-tagline">{t('tagline')}</p>
           </div>
 
-          <div className="app__controls">
-            <div className="switch-control">
-              <span className="switch-control__label">{t('settingsAppearance')}</span>
-              <div className="toggle-with-labels">
-                <span className="toggle-label toggle-label--off">{t('themeDark')}</span>
-                <label className="toggle" aria-label={themeLabel} title={themeLabel}>
-                  <input
-                    type="checkbox"
-                    checked={theme === 'high-contrast'}
-                    onChange={() => setTheme(theme === 'dark' ? 'high-contrast' : 'dark')}
-                  />
-                  <span className="toggle__track" />
-                  <span className="toggle__thumb" />
-                </label>
-                <span className="toggle-label toggle-label--on">{t('themeHighContrast')}</span>
-              </div>
-            </div>
+        </div>  
 
-            <div className="switch-control">
-              <span className="switch-control__label">{t('settingsFontSize')}</span>
-              <div className="toggle-with-labels">
-                <span className="toggle-label toggle-label--off">{t('fontSizeNormal')}</span>
-                <label className="toggle" aria-label={fontLabel} title={fontLabel}>
-                  <input
-                    type="checkbox"
-                    checked={fontSize === 'large'}
-                    onChange={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
-                  />
-                  <span className="toggle__track" />
-                  <span className="toggle__thumb" />
-                </label>
-                <span className="toggle-label toggle-label--on">{t('fontSizeLarge')}</span>
-              </div>
-            </div>
 
-            <label className="language-select" aria-label={t('settingsLanguage')}>
-              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-                {SUPPORTED_LANGUAGES.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.code.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </header>
+        <div className="app__controls">
+          <button
+            type="button"
+            className="pill-toggle"
+            aria-pressed={theme === 'high-contrast'}
+            onClick={() => setTheme(theme === 'dark' ? 'high-contrast' : 'dark')}
+            title={themeLabel}
+          >
+            <span aria-hidden="true">{theme === 'high-contrast' ? '◐' : '🌙'}</span>
+            <span className="pill-toggle__label">{themeLabel}</span>
+          </button>
 
-        <main id="main-content">
-          <section className="hero">
-            <NaviMascot size={96} />
-            <div className="hero__copy">
-              <h2>{t('heroTitle')}</h2>
-              <p>{t('heroSubtitle')}</p>
-            </div>
+      
+          <button
+            type="button"
+            className="pill-toggle"
+            aria-pressed={fontSize === 'large'}
+            onClick={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
+            title={fontLabel}
+          >
+            <span aria-hidden="true" className="pill-toggle__aa">Aa</span>
+            <span className="pill-toggle__label">{fontLabel}</span>
+          </button>
 
-            <form className="hero__query" onSubmit={handleSubmit}>
-              <label htmlFor="navi-question" className="visually-hidden">
-                {t('inputLabel')}
-              </label>
-              <input
-                id="navi-question"
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={t('inputPlaceholder')}
-                autoComplete="off"
-              />
-              <VoiceInputButton onResult={handleVoiceResult} disabled={isLoading} />
-              <button type="submit" className="hero__submit" disabled={isLoading || !input.trim()}>
-                {t('askButton')}
-              </button>
-            </form>
-
-            <div className="hero__quick-actions">
-              {quickActions.map((action) => (
-                <button
-                  key={action.prompt}
-                  type="button"
-                  className="action-chip"
-                  onClick={() => sendQuestion(action.prompt)}
-                  disabled={isLoading}
-                >
-                  {action.label}
-                </button>
+          <label className="language-select" aria-label={t('settingsLanguage')}>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {SUPPORTED_LANGUAGES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code.toUpperCase()}
+                </option>
               ))}
-            </div>
-          </section>
+            </select>
+          </label>
+        </div>
 
-          <ChatWindow messages={messages} isLoading={isLoading} />
+      {openSettings && (
+        <div className="settings-modal">
+          <button
+            type="button"
+            className="pill-toggle"
+            onClick={() => setTheme(theme === 'dark' ? 'high-contrast' : 'dark')}
+          >
+            {themeLabel}
+          </button>
+
+          <button
+            type="button"
+            className="pill-toggle"
+            onClick={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
+          >
+            {fontLabel}
+          </button>
+
+          <label className="language-select" aria-label={t('settingsLanguage')}>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {SUPPORTED_LANGUAGES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      <button
+        className="mobile-settings"
+        onClick={() => setOpenSettings((prev) => !prev)}
+        aria-expanded={openSettings}
+        aria-label={t('settings')}
+      >
+        ⚙️
+      </button>
+      </header>
+
+      <a href="#main-content" className="skip-link">
+        {t('skipLink')}
+      </a>
+
+      <div className="app__panel">
+        <main id="main-content" className="app__main">
+          <div className="conversation-area" ref={conversationRef}>
+            {!hasMessages ? (
+              <div className="empty-state">
+                <NaviMascot size={96} />
+                <div className="empty-state__copy">
+                  <h2>{t('heroTitle')}</h2>
+                  <p>{t('heroSubtitle')}</p>
+                </div>
+                <div className="empty-state__quick-actions">
+                  {quickActions.map((action) => (
+                    <button
+                      key={action.prompt}
+                      type="button"
+                      className="action-chip"
+                      onClick={() => sendQuestion(action.prompt)}
+                      disabled={isLoading}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <ChatWindow messages={messages} isLoading={isLoading} />
+            )}
+          </div>
+
+          <form className="composer" onSubmit={handleSubmit}>
+            <label htmlFor="navi-question" className="visually-hidden">
+              {t('inputLabel')}
+            </label>
+            <input
+              id="navi-question"
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={t('inputPlaceholder')}
+              autoComplete="off"
+            />
+            <VoiceInputButton onResult={handleVoiceResult} disabled={isLoading} />
+            <button
+              type="submit"
+              className="composer__submit"
+              disabled={isLoading || !input.trim()}
+              aria-label={t('askButton')}
+              title={t('askButton')}
+            >
+              <SendIcon />
+            </button>
+          </form>
         </main>
 
         <footer className="app__footer">
+          <span aria-hidden="true" className="app__footer-icon">i</span>
           <p>{t('footerNote')}</p>
         </footer>
       </div>

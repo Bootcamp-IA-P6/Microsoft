@@ -26,7 +26,7 @@ export default function NaviMascot({ size = 40, className = '' }) {
         }}
       />
       <span aria-hidden="true" className="navi-mascot__placeholder">
-        🚌
+      
       </span>
     </span>
   );

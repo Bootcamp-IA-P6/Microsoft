@@ -1,14 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../context/LanguageContext';
 
-// VoiceInputButton: usa la Web Speech API nativa del navegador.
-// Soporte real: Chrome/Edge sí, Safari parcial, Firefox NO (por eso el
-// chequeo de isSupported, con fallback a "solo texto" en vez de romper la app).
-//
-// El idioma de reconocimiento (recognition.lang) sigue el idioma activo de
-// la UI, así "27" en inglés y "27" en español se transcriben igual de bien
-// según lo que el usuario esté hablando.
+// Íconos SVG estándar (línea, stroke=currentColor) — sin librería externa,
+// para no sumar una dependencia solo por 2 glifos. Se exportan porque
+// SendIcon también se usa en App.tsx para el botón de "Preguntar".
 
+export function MicIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" />
+      <path d="M5 11a7 7 0 0 0 14 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function StopIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function SendIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12 19V5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M6 11l6-6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// VoiceInputButton: Web Speech API nativa. Soporte real: Chrome/Edge sí,
+// Safari parcial, Firefox NO (el botón no aparece ahí, no rompe la app).
 const RECOGNITION_LOCALE = { es: 'es-ES', en: 'en-US', pt: 'pt-PT' };
 
 export default function VoiceInputButton({ onResult, disabled }) {
@@ -75,8 +101,9 @@ export default function VoiceInputButton({ onResult, disabled }) {
         disabled={disabled}
         aria-pressed={isListening}
         aria-label={isListening ? t('voiceStop') : t('voiceAsk')}
+        title={isListening ? t('voiceStop') : t('voiceAsk')}
       >
-        <span aria-hidden="true">{isListening ? '●' : '🎙'}</span>
+        {isListening ? <StopIcon /> : <MicIcon />}
       </button>
       {error && (
         <p className="voice-input__error" role="alert">
