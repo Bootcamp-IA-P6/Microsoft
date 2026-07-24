@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-accent: #0072B2;
+  --color-accent-on: #ffffff;
+  --color-bubble-user: #f0f0f0;
+  --color-bubble-agent: #eef6f3;
+  --color-text-muted: #555555;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+html[data-font-size='normal'] {
+  font-size: 100%;
+}
+
+html[data-font-size='large'] {
+  font-size: 118.75%;
+}
+
+html[data-font-size='xlarge'] {
+  font-size: 137.5%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: #1a1a1a;
+  background: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========== HIGH CONTRAST ========== */
+html.high-contrast,
+html.high-contrast body {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+html.high-contrast * {
+  border-color: #ffffff !important;
+}
+
+html.high-contrast .border-\[\#d8d8d8\] {
+  border-color: #ffffff !important;
+}
+
+html.high-contrast input,
+html.high-contrast select,
+html.high-contrast button {
+  border: 2px solid #ffffff !important;
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+html.high-contrast .bg-white,
+html.high-contrast .bg-white\/90,
+html.high-contrast .bg-white\/92 {
+  background: #000000 !important;
+}
+
+html.high-contrast .text-\[\#1a1a1a\] {
+  color: #ffffff !important;
+}
+
+html.high-contrast .text-\[\#555555\] {
+  color: #ffffff !important;
+}
+
+html.high-contrast .bg-\[\#0072B2\] {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+html.high-contrast .bg-\[\#f0f0f0\] {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+html.high-contrast .bg-\[\#eef6f3\] {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+html.high-contrast .shadow-sm {
+  box-shadow: none !important;
+  border: 2px solid #ffffff !important;
+}
+
+html.high-contrast ::selection {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+html.high-contrast *:focus-visible {
+  outline: 3px solid #ffff00 !important;
+  outline-offset: 2px;
+}
+
+/* ========== HIGH CONTRAST — CARDS ========== */
+html.high-contrast .chat-card {
+  background: #111827 !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+html.high-contrast .chat-card .text-gray-700,
+html.high-contrast .chat-card .text-gray-500,
+html.high-contrast .chat-card .text-gray-400 {
+  color: #facc15 !important;
+}
+
+html.high-contrast .chat-card .text-gray-900 {
+  color: #ffffff !important;
+}
