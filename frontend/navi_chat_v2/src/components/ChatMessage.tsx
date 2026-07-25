@@ -1,12 +1,13 @@
-import type { ChatResponse } from '@/services/agentService';
+import { getStopCoords } from '@/utils/geoData';
 
 interface ChatMessageProps {
   role: 'user' | 'agent';
   text: string;
-  rows?: Record<string, unknown>[];
+  matchedStops?: string[];
+  key?: string | number;
 }
 
-export default function ChatMessage({ role, text, rows }: ChatMessageProps) {
+export default function ChatMessage({ role, text, matchedStops }: ChatMessageProps) {
   return (
     <div
       className={`flex items-start gap-2 ${
@@ -34,41 +35,30 @@ export default function ChatMessage({ role, text, rows }: ChatMessageProps) {
         }`}
       >
         <p className="m-0 text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
-        {rows && rows.length > 0 && (
-          <div className="mt-3 flex flex-col gap-3">
-            {rows.map((row, i) => (
-              <div
-                key={i}
-                className="chat-card flex flex-col gap-2 rounded-xl border border-gray-300 bg-white p-3.5 text-gray-900 shadow-sm transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#0072B2] text-sm font-bold text-white border border-white">
-                    {String(row.linea || row.line_id || '27')}
-                  </div>
-                  <div className="flex flex-col leading-tight">
-                    <span className="font-semibold text-sm text-gray-900">
-                      {String(row.parada || row.stop_name || 'Puerta del Sol')}
-                    </span>
-                    <span className="text-xs text-gray-700">
-                      hacia {String(row.destino || row.direction || 'Plaza de Castilla')}
-                    </span>
-                  </div>
-                </div>
+        {matchedStops && matchedStops.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {matchedStops.map((stop, i) => {
+              const coords = getStopCoords(stop);
+              if (!coords) return null;
 
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="rounded-full bg-[#00875A] px-3 py-1 font-medium text-white">
-                    • Próximo bus en {String(row.tiempo_estimado || row.estimated_arrival || '3 min')}
-                  </span>
-                  <span className="text-gray-700">
-                    • próximo en {String(row.siguiente_bus || '9 min')}
-                  </span>
-                </div>
-
-                <div className="text-[11px] text-gray-700">
-                  Frecuencia en días laborables: a cada {String(row.frecuencia || '8 min')}
-                </div>
-              </div>
-            ))}
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('map:flyTo', { detail: { lng: coords[0], lat: coords[1], zoom: 16 } })
+                    );
+                    window.dispatchEvent(
+                      new CustomEvent('nav:changeView', { detail: { view: 'split' } })
+                    );
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#0072B2] bg-white px-3 py-1.5 text-xs font-medium text-[#0072B2] cursor-pointer transition-colors hover:bg-[#0072B2] hover:text-white"
+                >
+                  📍 {stop}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

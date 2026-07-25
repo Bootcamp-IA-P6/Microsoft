@@ -10,6 +10,12 @@
     "module": "nodenext",
     "moduleResolution": "nodenext"
   },
-  "include": ["**/*"],
-  "exclude": [".temp/**/*"]
+  "include": [
+    "**/*"
+  ],
+  "files": [],
+  "exclude": [
+    ".temp/**/*",
+    "functions/**/*"
+  ]
 }

@@ -8,11 +8,16 @@ services:
       enabled: true
     password:
       enabled: true
+    allowedRedirectUris:
+      - https://handy-north-cb414576f1-westeurope.webapp.fabricapps.net
   staticHosting:
     enabled: true
     folder: dist
     buildCommand: npm run build:fabric
     indexDocument: index.html
   functions:
-    enabled: true
-    allowAnonymous: true
+    enabled: false
+  data:
+    enabled: false
+  storage:
+    enabled: false

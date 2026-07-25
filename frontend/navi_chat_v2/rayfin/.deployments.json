@@ -6,8 +6,9 @@
       "fabricWorkspaceId": "71ac3652-1bd0-41e3-b62a-d3b7efd38b84",
       "fabricTenantId": "0666b2b3-e005-4661-a4f3-ea42b8cc1257",
       "publishableKey": "pk-ic7EALN6lywNxNbEUMx4",
+      "hostingUrl": "https://handy-north-cb414576f1-westeurope.webapp.fabricapps.net",
       "fabricDeepLink": "https://app.fabric.microsoft.com/groups/71ac3652-1bd0-41e3-b62a-d3b7efd38b84/appbackends/c8be5efa-c253-4b9d-aa3e-637a58086b8a?ctid=0666b2b3-e005-4661-a4f3-ea42b8cc1257",
-      "deployedAt": "2026-07-24T17:20:22.435Z"
+      "deployedAt": "2026-07-25T09:56:48.678Z"
     }
   },
   "active": "app-test"

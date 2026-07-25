@@ -39,10 +39,23 @@ const MAP_STYLE: maplibregl.StyleSpecification = {
   ],
 };
 
+function createMarkerEl(): HTMLElement {
+  const el = document.createElement('div');
+  el.style.width = '20px';
+  el.style.height = '20px';
+  el.style.backgroundColor = '#00E5FF';
+  el.style.borderRadius = '50%';
+  el.style.border = '3px solid #FFFFFF';
+  el.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+  el.style.filter = 'none';
+  return el;
+}
+
 export default function MapPlaceholder({ className = '', flyTarget }: MapPlaceholderProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return;
@@ -100,6 +113,25 @@ export default function MapPlaceholder({ className = '', flyTarget }: MapPlaceho
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { lng, lat, zoom = 16 } = (e as CustomEvent).detail;
+      const map = mapRef.current;
+      if (!map) return;
+
+      map.flyTo({ center: [lng, lat], zoom, essential: true, duration: 1200 });
+
+      markerRef.current?.remove();
+      const marker = new maplibregl.Marker({ element: createMarkerEl() })
+        .setLngLat([lng, lat])
+        .addTo(map);
+      markerRef.current = marker;
+    };
+
+    window.addEventListener('map:flyTo', handler);
+    return () => window.removeEventListener('map:flyTo', handler);
   }, []);
 
   return (

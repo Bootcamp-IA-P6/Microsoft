@@ -36,6 +36,15 @@ export default function App() {
     document.documentElement.dataset.fontSize = fontSize;
   }, [fontSize]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { view: v } = (e as CustomEvent).detail;
+      setView(v);
+    };
+    window.addEventListener('nav:changeView', handler);
+    return () => window.removeEventListener('nav:changeView', handler);
+  }, []);
+
   const handleSetView = useCallback((v: View) => {
     setView(v);
     window.dispatchEvent(new Event('resize'));
@@ -140,28 +149,22 @@ export default function App() {
         </div>
       </header>
 
-      {view === 'chat' && (
-        <section className="flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
+        <section
+          className={`${
+            view === 'map' ? 'hidden' : 'flex-1'
+          } overflow-hidden`}
+        >
           <ChatContainer language={language} onQuickAction={handleQuickAction} />
         </section>
-      )}
-
-      {view === 'map' && (
-        <section className="flex-1 overflow-hidden">
+        <section
+          className={`${
+            view === 'chat' ? 'hidden' : ''
+          } flex-1 overflow-hidden ${view === 'split' ? 'hidden md:block' : ''}`}
+        >
           <MapPlaceholder language={language} className="h-full w-full" flyTarget={flyTarget} />
         </section>
-      )}
-
-      {view === 'split' && (
-        <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
-          <section className="flex-1 overflow-hidden md:w-1/2 md:border-r border-[#d8d8d8]">
-            <ChatContainer language={language} onQuickAction={handleQuickAction} />
-          </section>
-          <section className="hidden md:block md:w-1/2 overflow-hidden">
-            <MapPlaceholder language={language} className="h-full w-full" flyTarget={flyTarget} />
-          </section>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,64 +1,49 @@
 // services/naviAgent.js
-//
-// ⚠️ ÚNICO ARCHIVO A CAMBIAR cuando el Data Agent esté publicado como MCP.
-//
-// Contrato de retorno: { answerText: string, rows: GoldRow[] }
-// `language` ('es' | 'en' | 'pt') se recibe para que el mock responda
-// coherente con la UI. Cuando conecten el Data Agent real, pasar este mismo
-// parámetro en el payload del MCP para que responda en el idioma correcto —
-// no está confirmado en el contrato de datos si el agente real lo soporta,
-// hay que validarlo con quien configure el Data Agent.
-
 import { mockGoldRows } from '../mocks/mockGoldRows';
 
-const SIMULATED_LATENCY_MS = 600;
-
-const ANSWERS = {
-  incident: {
-    es: (line, header) => `La línea ${line} tiene una incidencia activa: ${header}.`,
-    en: (line, header) => `Line ${line} has an active disruption: ${header}.`,
-    pt: (line, header) => `A linha ${line} tem uma incidência ativa: ${header}.`,
-  },
-  stale: {
-    es: (line) => `El dato de la línea ${line} podría estar desactualizado, pero el último bus visto llega en unos minutos.`,
-    en: (line) => `Data for line ${line} might be outdated, but the last bus seen arrives in a few minutes.`,
-    pt: (line) => `O dado da linha ${line} pode estar desatualizado, mas o último ônibus visto chega em poucos minutos.`,
-  },
-  noBus: {
-    es: (line) => `No veo ningún autobús próximo de la línea ${line} en esta parada ahora mismo.`,
-    en: (line) => `I don't see any upcoming bus for line ${line} at this stop right now.`,
-    pt: (line) => `Não vejo nenhum ônibus próximo da linha ${line} nesta parada agora.`,
-  },
-  allLines: {
-    es: 'Estas son las líneas que pasan cerca de tu ubicación:',
-    en: 'Here are the lines passing near your location:',
-    pt: 'Estas são as linhas que passam perto da sua localização:',
-  },
-};
-
 export async function askNaviAgent(userQuestion, language = 'es') {
-  // ============================================================
-  // TODO (cuando el Data Agent esté publicado): reemplazar el cuerpo
-  // por un fetch real a import.meta.env.VITE_NAVI_MCP_URL, incluyendo
-  // { question: userQuestion, language } en el payload.
-  // ============================================================
+  const mcpUrl = import.meta.env.VITE_NAVI_MCP_URL;
 
-  await new Promise((resolve) => setTimeout(resolve, SIMULATED_LATENCY_MS));
+  // Si no hay URL configurada en el .env, hace fallback al mock por seguridad
+  if (!mcpUrl) {
+    console.warn("⚠️ VITE_NAVI_MCP_URL no está definida. Usando respuesta mock.");
+    return {
+      answerText: "Modo Mock: La línea 027 llegará en 3 mins.",
+      rows: mockGoldRows
+    };
+  }
 
-  const lang = ANSWERS.allLines[language] ? language : 'es';
-  const q = userQuestion.toLowerCase();
+  try {
+    const response = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question: userQuestion,
+        language: language
+      })
+    });
 
-  if (q.includes('incidencia') || q.includes('incident') || q.includes('14')) {
-    const row = mockGoldRows.find((r) => r.line_id === '014');
-    return { answerText: ANSWERS.incident[lang](row.line_label, row.alert_header), rows: [row] };
+    if (!response.ok) {
+      throw new Error(`Error en el Data Agent: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // Normalizamos la respuesta del Agente para que coincida con lo que espera React
+    return {
+      answerText: data.answerText || data.response || "Respuesta recibida del agente.",
+      rows: data.rows || data.data || [] // Si el agente no devuelve la lista de buses, pasa un array vacío
+    };
+
+  } catch (error) {
+    console.error("❌ Error al conectar con Navi Data Agent:", error);
+    
+    // Retorno de fallback ante fallos de red para no romper la app
+    return {
+      answerText: `No se pudo conectar con el asistente (${error.message}). Por favor, reintenta en un momento.`,
+      rows: []
+    };
   }
-  if (q.includes('51') || q.includes('aluche')) {
-    const row = mockGoldRows.find((r) => r.line_id === '051');
-    return { answerText: ANSWERS.stale[lang](row.line_label), rows: [row] };
-  }
-  if (q.includes('3') && !q.includes('27') && !q.includes('51')) {
-    const row = mockGoldRows.find((r) => r.line_id === '003');
-    return { answerText: ANSWERS.noBus[lang](row.line_label), rows: [row] };
-  }
-  return { answerText: ANSWERS.allLines[lang], rows: mockGoldRows };
 }

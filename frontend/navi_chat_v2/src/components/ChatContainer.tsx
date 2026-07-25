@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import ChatMessage from './ChatMessage';
 import { askAgent } from '@/services/agentService';
 import type { ChatResponse } from '@/services/agentService';
+import { extractAllStops } from '@/services/parseStops';
 import type { Lang } from '@/i18n/translations';
 import { t, speechLang } from '@/i18n/translations';
 
@@ -9,7 +10,7 @@ interface Message {
   id: string;
   role: 'user' | 'agent';
   text: string;
-  rows?: Record<string, unknown>[];
+  matchedStops?: string[];
 }
 
 export interface FlyTarget {
@@ -94,12 +95,14 @@ export default function ChatContainer({ language, onQuickAction }: ChatContainer
     setIsLoading(true);
 
     try {
-      const { answerText, rows }: ChatResponse = await askAgent(question, language);
+      const { answerText }: ChatResponse = await askAgent(question, language);
+      const matchedStops = extractAllStops(answerText, question);
+
       const agentMsg: Message = {
         id: crypto.randomUUID(),
         role: 'agent',
         text: answerText,
-        rows,
+        matchedStops,
       };
       setMessages((prev) => [...prev, agentMsg]);
     } catch {
@@ -166,7 +169,7 @@ export default function ChatContainer({ language, onQuickAction }: ChatContainer
         ) : (
           <div className="flex flex-col gap-3" role="log" aria-live="polite" aria-relevant="additions">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} role={msg.role} text={msg.text} rows={msg.rows} />
+              <ChatMessage key={msg.id} role={msg.role} text={msg.text} matchedStops={msg.matchedStops} />
             ))}
             {isLoading && (
               <div className="flex items-center gap-2 text-sm text-[#555555] italic self-start pl-10">

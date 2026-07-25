@@ -24,9 +24,13 @@
     "@microsoft/rayfin-client": "^1.33.2",
     "@microsoft/rayfin-core": "^1.33.2",
     "@microsoft/rayfin-data": "^1.33.2",
+    "@microsoft/rayfin-host-docs": "^1.1.0",
     "@tailwindcss/vite": "^4.1.11",
+    "deck.gl": "^9.3.7",
+    "maplibre-gl": "^6.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-map-gl": "^8.1.1",
     "react-router-dom": "^7.1.1"
   },
   "devDependencies": {
