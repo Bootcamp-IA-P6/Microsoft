@@ -1,12 +1,28 @@
 import type { BusInfo } from '@/utils/parseBusInfo';
 
+export function hasIncident(raw: string): boolean {
+  const match = raw.match(/incidencias?|desv[ií]os|corte|aver[ií]a/i);
+  if (!match) return false;
+
+  const sentenceStart = Math.max(
+    raw.lastIndexOf('.', match.index),
+    raw.lastIndexOf(',', match.index),
+    raw.lastIndexOf(';', match.index)
+  ) + 1;
+
+  const clause = raw.slice(sentenceStart, match.index).toLowerCase();
+  const negated = /\b(no|sin|ningun[ao]?)\b/.test(clause);
+
+  return !negated;
+}
+
 interface BusCardProps {
   info: BusInfo;
   onFlyTo?: () => void;
 }
 
 export default function BusCard({ info, onFlyTo }: BusCardProps) {
-  const hasIncident = /incidencias?|desv[ií]os|corte|aver[ií]a/i.test(info.raw);
+  const hasIncidentFlag = hasIncident(info.raw);
 
   return (
     <div className="p-4 rounded-2xl bg-zinc-900/90 border border-zinc-800 shadow-md backdrop-blur-md flex flex-col gap-3 my-2">
@@ -19,7 +35,7 @@ export default function BusCard({ info, onFlyTo }: BusCardProps) {
             {info.stopName || 'Parada 5907 (Sevilla)'}
           </span>
         </div>
-        {hasIncident && (
+        {hasIncidentFlag && (
           <span className="text-[10px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
             ⚠️ Con desvíos
           </span>
