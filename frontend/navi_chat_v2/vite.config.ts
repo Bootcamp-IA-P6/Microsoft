@@ -22,12 +22,4 @@ export default defineConfig({
       target: 'es2022',
     },
   },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:7071',
-        changeOrigin: true,
-      },
-    },
-  },
 });

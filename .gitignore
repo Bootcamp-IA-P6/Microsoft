@@ -38,3 +38,7 @@ docs/roadmap.md
 docs/data-source-contract-draft.md
 
 frontend/navi_chat_v2/node_modules
+.temp/
+
+frontend/navi_chat_v2/tsconfig.tsbuildinfo
+dist/

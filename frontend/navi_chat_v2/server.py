@@ -21,6 +21,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://handy-north-cb414576f1-westeurope.webapp.fabricapps.net",
+        "https://hale-hawk-199fba3f05-francecentral.webapp.fabricapps.net",
         "http://localhost:5173",
     ],
     allow_methods=["POST"],

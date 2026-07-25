@@ -3,6 +3,7 @@ import ChatMessage from './ChatMessage';
 import { askAgent } from '@/services/agentService';
 import type { ChatResponse } from '@/services/agentService';
 import { extractAllStops } from '@/services/parseStops';
+import { enrichStopQuery } from '@/utils/enrichQuery';
 import type { Lang } from '@/i18n/translations';
 import { t, speechLang } from '@/i18n/translations';
 
@@ -22,19 +23,21 @@ export interface FlyTarget {
 interface ChatContainerProps {
   language: Lang;
   onQuickAction?: (target: FlyTarget) => void;
+  onFirstMessage?: () => void;
 }
 
-const QUICK_ACTION_TARGETS: FlyTarget[] = [
-  { lng: -3.7008, lat: 40.4088, zoom: 15 },
-  { lng: -3.6892, lat: 40.4669, zoom: 15 },
-  { lng: -3.7038, lat: 40.4168, zoom: 13 },
+const SUGGESTIONS = [
+  { label: '🚍 Línea 5 en Sol - Sevilla', query: '¿Cuánto tarda la línea 5 en la parada 5907 (Sevilla)?' },
+  { label: '📍 Paradas cercanas en Lavapiés', query: '¿Qué paradas de autobús hay cerca de Lavapiés?' },
+  { label: '⚠️ Incidencias en la línea 27', query: '¿Hay incidencias activas en la línea 27?' },
 ];
 
-export default function ChatContainer({ language, onQuickAction }: ChatContainerProps) {
+export default function ChatContainer({ language, onQuickAction, onFirstMessage }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [hasSentFirst, setHasSentFirst] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -94,8 +97,14 @@ export default function ChatContainer({ language, onQuickAction }: ChatContainer
     setInput('');
     setIsLoading(true);
 
+    if (!hasSentFirst) {
+      setHasSentFirst(true);
+      onFirstMessage?.();
+    }
+
     try {
-      const { answerText }: ChatResponse = await askAgent(question, language);
+      const enriched = enrichStopQuery(question);
+      const { answerText }: ChatResponse = await askAgent(enriched, language);
       const matchedStops = extractAllStops(answerText, question);
 
       const agentMsg: Message = {
@@ -130,32 +139,38 @@ export default function ChatContainer({ language, onQuickAction }: ChatContainer
     <div className="flex h-full flex-col bg-white/92 p-5 overflow-hidden" style={{ backdropFilter: 'blur(10px)' }}>
       <div className="flex-1 min-h-0 overflow-y-auto px-1 py-2 pb-6">
         {!hasMessages ? (
-          <div className="flex h-full flex-col items-center justify-center text-center gap-5 px-5">
-            <span className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center bg-[#eef6f3]">
-              <img
-                src="/navi-mascot.svg"
-                alt=""
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            </span>
-            <div>
-              <h2 className="m-0 text-2xl font-bold" style={{ fontFamily: 'var(--font-heading)' }}>
-                {t(language, 'greeting')}
-              </h2>
-              <p className="m-1 mt-1 text-sm text-[#555555]">
-                {t(language, 'subtitle')}
-              </p>
+          <div className="flex h-full flex-col items-center justify-center text-center px-4">
+            <img src="/icon-navi.svg" alt="" className="w-16 h-16 mb-5" />
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100 mb-2 text-center">
+              ¿A dónde quieres ir hoy?
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-zinc-400 mb-8 text-center">
+              Consulta tiempos en tiempo real, paradas e incidencias de la EMT Madrid.
+            </p>
+            <div className="grid gap-3 w-full max-w-sm">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s.query}
+                  type="button"
+                  onClick={() => handleSend(s.query)}
+                  disabled={isLoading}
+                  className="p-3.5 text-left text-xs md:text-sm bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-600 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer text-slate-700 dark:text-zinc-300 font-medium"
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
-            <div className="flex flex-wrap justify-center gap-2">
+            <div className="flex flex-wrap justify-center gap-2 mt-8">
               {quickActions.map((action, i) => (
                 <button
                   key={action.prompt}
                   type="button"
                   onClick={() => {
                     onQuickAction?.(QUICK_ACTION_TARGETS[i]);
+                    if (!hasSentFirst) {
+                      setHasSentFirst(true);
+                      onFirstMessage?.();
+                    }
                     handleSend(action.prompt);
                   }}
                   disabled={isLoading}
@@ -234,3 +249,9 @@ export default function ChatContainer({ language, onQuickAction }: ChatContainer
     </div>
   );
 }
+
+const QUICK_ACTION_TARGETS: FlyTarget[] = [
+  { lng: -3.7008, lat: 40.4088, zoom: 15 },
+  { lng: -3.6892, lat: 40.4669, zoom: 15 },
+  { lng: -3.7038, lat: 40.4168, zoom: 13 },
+];

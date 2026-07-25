@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import ChatContainer from '@/components/ChatContainer';
-import MapPlaceholder from '@/components/MapPlaceholder';
+import Map from '@/components/Map';
 import type { Lang } from '@/i18n/translations';
 import type { FlyTarget } from '@/components/ChatContainer';
 import { t } from '@/i18n/translations';
@@ -22,11 +22,12 @@ const fontSizes: { value: FontSize; label: string }[] = [
 ];
 
 export default function App() {
-  const [view, setView] = useState<View>('split');
+  const [view, setView] = useState<View>('chat');
   const [language, setLanguage] = useState<Lang>('es');
   const [highContrast, setHighContrast] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>('normal');
   const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
+  const [isMapVisible, setIsMapVisible] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('high-contrast', highContrast);
@@ -54,11 +55,19 @@ export default function App() {
     setFlyTarget({ ...target });
   }, []);
 
+  const handleFirstMessage = useCallback(() => {
+    setIsMapVisible(true);
+    setView('split');
+  }, []);
+
   const tabs: { id: View; label: string }[] = [
     { id: 'chat', label: t(language, 'tabChat') },
     { id: 'map', label: t(language, 'tabMap') },
     { id: 'split', label: t(language, 'tabSplit') },
   ];
+
+  const showSplit = isMapVisible && view !== 'chat';
+  const showMapOnly = isMapVisible && view === 'map';
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
@@ -149,20 +158,30 @@ export default function App() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden transition-all duration-500 ease-in-out">
         <section
-          className={`${
-            view === 'map' ? 'hidden' : 'flex-1'
-          } overflow-hidden`}
+          className={`overflow-hidden transition-all duration-500 ease-in-out ${
+            showMapOnly
+              ? 'w-0 opacity-0 pointer-events-none'
+              : showSplit
+              ? 'w-full md:w-1/2 lg:w-5/12 border-r border-slate-200 dark:border-zinc-800'
+              : 'w-full max-w-3xl mx-auto'
+          }`}
         >
-          <ChatContainer language={language} onQuickAction={handleQuickAction} />
+          <ChatContainer
+            language={language}
+            onQuickAction={handleQuickAction}
+            onFirstMessage={handleFirstMessage}
+          />
         </section>
         <section
-          className={`${
-            view === 'chat' ? 'hidden' : ''
-          } flex-1 overflow-hidden ${view === 'split' ? 'hidden md:block' : ''}`}
+          className={`overflow-hidden transition-all duration-500 ease-in-out ${
+            isMapVisible
+              ? 'w-full md:w-1/2 lg:w-7/12 opacity-100'
+              : 'w-0 opacity-0 pointer-events-none'
+          } ${showMapOnly ? 'block' : 'hidden md:block'}`}
         >
-          <MapPlaceholder language={language} className="h-full w-full" flyTarget={flyTarget} />
+          <Map language={language} className="h-full w-full" flyTarget={flyTarget} isMapVisible={isMapVisible} />
         </section>
       </div>
     </div>

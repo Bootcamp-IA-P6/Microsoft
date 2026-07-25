@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_RAYFIN_API_URL: string;
-  readonly VITE_RAYFIN_PUBLISHABLE_KEY: string;
+  readonly VITE_CHAT_BACKEND_URL: string;
+  readonly VITE_DEMO_API_KEY: string;
 }
 
 interface ImportMeta {
