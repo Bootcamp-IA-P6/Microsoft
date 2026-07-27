@@ -34,12 +34,6 @@ interface ChatContainerProps {
   onFirstMessage?: () => void;
 }
 
-const SUGGESTIONS = [
-  { label: '🚍 Línea 5 en Sol - Sevilla', query: '¿Cuánto tarda la línea 5 en la parada 5907 (Sevilla)?' },
-  { label: '📍 Paradas cercanas en Lavapiés', query: '¿Qué paradas de autobús hay cerca de Lavapiés?' },
-  { label: '⚠️ Incidencias en la línea 27', query: '¿Hay incidencias activas en la línea 27?' },
-];
-
 export default function ChatContainer({ language, onQuickAction, onFirstMessage }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
