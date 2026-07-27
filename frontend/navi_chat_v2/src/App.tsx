@@ -1,46 +1,44 @@
-import { useState, useEffect, useCallback } from 'react';
-import ChatContainer from '@/components/ChatContainer';
-import Map from '@/components/Map';
-import type { Lang } from '@/i18n/translations';
-import type { FlyTarget } from '@/components/ChatContainer';
-import { t } from '@/i18n/translations';
+import { useEffect, useCallback, useState } from 'react';
+import ChatContainer from './components/ChatContainer'; // === NAVI-MAP: componente de tu compi (agente + mapa), sin cambios internos ===
+import Map from './components/Map'; // === NAVI-MAP: sin tocar, ni una línea ===
+import type { FlyTarget } from './components/ChatContainer'; // === NAVI-MAP ===
+import type { Lang } from '@/i18n/translations'; // === NAVI-MAP: tipo que ya usaban ChatContainer/Map ===
+import { t as tShared } from '@/i18n/translations'; // === FUSIÓN: t() de tu compi, renombrado para no chocar con tu t() de useTranslation() ===
+import { AccessibilityProvider, useAccessibility } from './context/AccessibilityContext';
+import { LanguageProvider, useTranslation } from './context/LanguageContext';
+import { SUPPORTED_LANGUAGES } from './i18n/translations';
+import './App.css';
 
+// === NAVI-MAP: las 3 vistas posibles, igual que en la versión de tu compi ===
 type View = 'chat' | 'map' | 'split';
-type FontSize = 'normal' | 'large' | 'xlarge';
 
-const languages: { code: Lang; label: string }[] = [
-  { code: 'es', label: 'ES' },
-  { code: 'en', label: 'EN' },
-  { code: 'pt', label: 'PT' },
-  { code: 'ko', label: 'KO' },
-];
+function AppShell() {
+  const { t, language, setLanguage } = useTranslation();
+  const { theme, setTheme, fontSize, setFontSize } = useAccessibility();
+  const [openSettings, setOpenSettings] = useState(false);
 
-const fontSizes: { value: FontSize; label: string }[] = [
-  { value: 'normal', label: 'A' },
-  { value: 'large', label: 'A+' },
-  { value: 'xlarge', label: 'A++' },
-];
-
-export default function App() {
+  // === NAVI-MAP: estado de vista/mapa (antes vivía en el App.tsx de tu
+  // compi; ahora vive acá, junto con el resto del estado del shell). ===
   const [view, setView] = useState<View>('chat');
-  const [language, setLanguage] = useState<Lang>('es');
-  const [highContrast, setHighContrast] = useState(false);
-  const [fontSize, setFontSize] = useState<FontSize>('normal');
-  const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
   const [isMapVisible, setIsMapVisible] = useState(false);
+  const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
 
+  // === NAVI-MAP: "puente" entre tu sistema de temas (atributo
+  // data-theme, controlado por AccessibilityContext) y la clase
+  // "high-contrast" que Map.tsx ya espera en <html> para invertir los
+  // colores del mapa. No se tocó Map.tsx ni AccessibilityContext — esto
+  // solo mantiene ambos sincronizados. ===
   useEffect(() => {
-    document.documentElement.classList.toggle('high-contrast', highContrast);
-  }, [highContrast]);
+    document.documentElement.classList.toggle('high-contrast', theme === 'dark');
+  }, [theme]);
 
-  useEffect(() => {
-    document.documentElement.dataset.fontSize = fontSize;
-  }, [fontSize]);
-
+  // === NAVI-MAP: igual que en el App.tsx de tu compi — permite que
+  // ChatMessage/BusCard pidan cambiar de vista al hacer clic en "Ver en
+  // el mapa". ===
   useEffect(() => {
     const handler = (e: Event) => {
       const { view: v } = (e as CustomEvent).detail;
-      setView(v);
+      setView(v as View);
     };
     window.addEventListener('nav:changeView', handler);
     return () => window.removeEventListener('nav:changeView', handler);
@@ -48,7 +46,11 @@ export default function App() {
 
   const handleSetView = useCallback((v: View) => {
     setView(v);
-    window.dispatchEvent(new Event('resize'));
+    // Le da un frame a React para sacar la clase `hidden` del contenedor
+    // del mapa antes de pedirle a MapLibre que recalcule tamaño.
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
   }, []);
 
   const handleQuickAction = useCallback((target: FlyTarget) => {
@@ -60,130 +62,225 @@ export default function App() {
     setView('split');
   }, []);
 
-  const tabs: { id: View; label: string }[] = [
-    { id: 'chat', label: t(language, 'tabChat') },
-    { id: 'map', label: t(language, 'tabMap') },
-    { id: 'split', label: t(language, 'tabSplit') },
+  // === NAVI-MAP: visibilidad derivada del estado, no de display ligado
+  // al breakpoint — así el chat y el mapa nunca se desmontan, solo se
+  // ocultan con CSS (mismo criterio que usamos ayer para el fix de
+  // móvil). ===
+  const showChat = view !== 'map';
+  const showMap = isMapVisible && view !== 'chat';
+  const isSplit = showChat && showMap;
+  const mapSolo = showMap && !showChat;
+
+  const themeLabel = theme === 'dark' ? t('themeDark') : t('themeHighContrast');
+  const fontLabel = fontSize === 'large' ? t('fontSizeLarge') : t('fontSizeNormal');
+
+  // === FUSIÓN: ahora sí conectado a tabChat/tabMap/tabSplit del archivo
+  // fusionado — ya sale traducido en es/en/pt/ko según el idioma activo. ===
+  const viewTabs: { id: View; label: string }[] = [
+    { id: 'chat', label: tShared(language as Lang, 'tabChat') },
+    { id: 'map', label: tShared(language as Lang, 'tabMap') },
+    { id: 'split', label: tShared(language as Lang, 'tabSplit') },
   ];
 
-  const showSplit = isMapVisible && view !== 'chat';
-  const showMapOnly = isMapVisible && view === 'map';
-
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <header
-        className="flex h-16 shrink-0 items-center justify-between border-b border-[#d8d8d8] bg-white/90 backdrop-blur-md px-4 z-50 gap-2"
-        style={{ fontFamily: 'var(--font-body)' }}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <img
-            src="/icon-navi.svg"
-            alt=""
-            className="w-[38px] h-[38px] rounded-xl object-contain flex-shrink-0"
-          />
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <h1
-              className="m-0 text-lg tracking-wider"
-              style={{ fontFamily: 'var(--font-heading)' }}
-            >
-              NAVI
-            </h1>
-            <p className="m-0 text-xs text-[#555555] truncate max-w-[200px]">
-              {t(language, 'tagline')}
-            </p>
+    <div className="app">
+      {/* ============================================================
+          Navbar: TAL CUAL la tenías. Único agregado: el <div className="view-switcher">
+          dentro de .app__controls, marcado abajo con === NAVI-MAP ===.
+          ============================================================ */}
+      <header className="app__navbar">
+        <div className="app__brand">
+          <img src="/icon-navi.svg" alt="" className="app__brand-icon" />
+          <div className="app__brand-text">
+            <h1 className="app__brand-name">NAVI</h1>
+            <p className="app__brand-tagline">{t('tagline')}</p>
           </div>
+
+        </div>  
+
+
+        <div className="app__controls">
+          {/* === NAVI-MAP: selector Chat/Mapa/Ambos, versión escritorio.
+              Solo aparece una vez que ya se mandó el primer mensaje
+              (isMapVisible), igual que antes no había nada de mapa hasta
+              ese momento. Se oculta en móvil vía CSS (ver App.css) y se
+              reemplaza por la barra fija de abajo. === */}
+          {isMapVisible && (
+            <nav className="view-switcher" role="tablist" aria-label="Vista">
+              {viewTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === tab.id}
+                  className="view-switcher__btn"
+                  onClick={() => handleSetView(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
+
+          <button
+            type="button"
+            className="pill-toggle"
+            aria-pressed={theme === 'high-contrast'}
+            onClick={() => setTheme(theme === 'dark' ? 'high-contrast' : 'dark')}
+            title={themeLabel}
+          >
+            <span aria-hidden="true">{theme === 'high-contrast' ? '◐' : '🌙'}</span>
+            <span className="pill-toggle__label">{themeLabel}</span>
+          </button>
+
+      
+          <button
+            type="button"
+            className="pill-toggle"
+            aria-pressed={fontSize === 'large'}
+            onClick={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
+            title={fontLabel}
+          >
+            <span aria-hidden="true" className="pill-toggle__aa">Aa</span>
+            <span className="pill-toggle__label">{fontLabel}</span>
+          </button>
+
+          <label className="language-select" aria-label={t('settingsLanguage')}>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {SUPPORTED_LANGUAGES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        <nav className="hidden md:flex gap-1 rounded-full border border-[#d8d8d8] p-0.5" role="tablist">
-          {tabs.map((tab) => (
+      {openSettings && (
+        <div className="settings-modal">
+          <button
+            type="button"
+            className="pill-toggle"
+            onClick={() => setTheme(theme === 'dark' ? 'high-contrast' : 'dark')}
+          >
+            {themeLabel}
+          </button>
+
+          <button
+            type="button"
+            className="pill-toggle"
+            onClick={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
+          >
+            {fontLabel}
+          </button>
+
+          <label className="language-select" aria-label={t('settingsLanguage')}>
+            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {SUPPORTED_LANGUAGES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {/* === NAVI-MAP: mismo selector, versión dentro del modal de
+              ajustes de móvil (<=480px), para no perderlo cuando
+              .app__controls se oculta del todo. === */}
+          {isMapVisible && (
+            <nav className="view-switcher" role="tablist" aria-label="Vista">
+              {viewTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === tab.id}
+                  className="view-switcher__btn"
+                  onClick={() => handleSetView(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          )}
+        </div>
+      )}
+
+      <button
+        className="mobile-settings"
+        onClick={() => setOpenSettings((prev) => !prev)}
+        aria-expanded={openSettings}
+        aria-label={t('settings')}
+      >
+        ⚙️
+      </button>
+      </header>
+
+      <a href="#main-content" className="skip-link">
+        {t('skipLink')}
+      </a>
+
+      {/* ============================================================
+          === NAVI-MAP: .app__body reemplaza lo que antes era
+          .app__panel como hijo directo de .app. Ahora .app__panel y
+          .app__map-panel son dos tarjetas hermanas dentro de
+          .app__body. Ninguna de las dos se desmonta nunca — se ocultan
+          con clases CSS (--hidden) para no perder el historial del chat
+          ni reinicializar MapLibre.
+          ============================================================ */}
+      <div className="app__body">
+        <div className={`app__panel ${isSplit ? 'app__panel--split' : ''} ${!showChat ? 'app__panel--hidden' : ''}`}>
+          {/* ChatContainer trae SU PROPIO <main id="main-content" className="app__main">
+              por dentro (reskin de las clases de tu compi a las tuyas),
+              así que acá no hace falta envolverlo de nuevo. */}
+          <ChatContainer
+            language={language as Lang}
+            onQuickAction={handleQuickAction}
+            onFirstMessage={handleFirstMessage}
+          />
+
+          <footer className="app__footer">
+            <span aria-hidden="true" className="app__footer-icon">i</span>
+            <p>{t('footerNote')}</p>
+          </footer>
+        </div>
+
+        <div
+          className={`app__map-panel ${mapSolo ? 'app__map-panel--solo' : ''} ${!showMap ? 'app__map-panel--hidden' : ''}`}
+        >
+          <Map language={language as Lang} className="app__map-fill" flyTarget={flyTarget} isMapVisible={isMapVisible} />
+        </div>
+      </div>
+
+      {/* === NAVI-MAP: selector de vista fijo abajo, solo visible en
+          móvil (ver media query en App.css) y solo una vez que hay
+          mapa disponible. === */}
+      {isMapVisible && (
+        <nav className="view-switcher view-switcher--mobile" role="tablist" aria-label="Vista">
+          {viewTabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
               role="tab"
               aria-selected={view === tab.id}
+              className="view-switcher__btn"
               onClick={() => handleSetView(tab.id)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-                view === tab.id
-                  ? 'bg-[#0072B2] text-white'
-                  : 'text-[#555555] hover:text-[#1a1a1a]'
-              } ${tab.id === 'split' ? 'hidden lg:inline-block' : ''}`}
             >
               {tab.label}
             </button>
           ))}
         </nav>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setHighContrast((v) => !v)}
-            className={`h-9 rounded-full border px-3 text-xs font-semibold cursor-pointer transition-colors ${
-              highContrast
-                ? 'bg-[#0072B2] text-white border-transparent'
-                : 'bg-white text-[#1a1a1a] border-[#d8d8d8]'
-            }`}
-            title={t(language, 'themeLabel')}
-          >
-            ◐
-          </button>
-
-          <div className="flex rounded-full border border-[#d8d8d8] overflow-hidden">
-            {fontSizes.map((fs) => (
-              <button
-                key={fs.value}
-                type="button"
-                onClick={() => setFontSize(fs.value)}
-                className={`px-2.5 py-1.5 text-xs font-semibold cursor-pointer transition-colors ${
-                  fontSize === fs.value
-                    ? 'bg-[#0072B2] text-white'
-                    : 'bg-white text-[#1a1a1a]'
-                }`}
-              >
-                {fs.label}
-              </button>
-            ))}
-          </div>
-
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value as Lang)}
-            className="h-9 rounded-full border border-[#d8d8d8] bg-white px-3 text-xs font-bold text-[#1a1a1a] cursor-pointer outline-none"
-            aria-label={t(language, 'langLabel')}
-          >
-            {languages.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden transition-all duration-500 ease-in-out">
-        <section
-          className={`overflow-hidden transition-all duration-500 ease-in-out ${
-            showMapOnly
-              ? 'w-0 opacity-0 pointer-events-none'
-              : showSplit
-              ? 'w-full md:w-1/2 lg:w-5/12 border-r border-slate-200 dark:border-zinc-800'
-              : 'w-full max-w-3xl mx-auto'
-          }`}
-        >
-          <ChatContainer
-            language={language}
-            onQuickAction={handleQuickAction}
-            onFirstMessage={handleFirstMessage}
-          />
-        </section>
-        <section
-          className={`overflow-hidden transition-all duration-500 ease-in-out ${
-            isMapVisible
-              ? 'w-full md:w-1/2 lg:w-7/12 opacity-100'
-              : 'w-0 opacity-0 pointer-events-none'
-          } ${showMapOnly ? 'block' : 'hidden md:block'}`}
-        >
-          <Map language={language} className="h-full w-full" flyTarget={flyTarget} isMapVisible={isMapVisible} />
-        </section>
-      </div>
+      )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AccessibilityProvider>
+      <LanguageProvider>
+        <AppShell />
+      </LanguageProvider>
+    </AccessibilityProvider>
   );
 }

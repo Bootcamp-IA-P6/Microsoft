@@ -1,0 +1,908 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500&display=swap');
+
+/* ============================================================
+   TEMAS
+   ============================================================ */
+:root,
+[data-theme='light'] {
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  --color-text: #1a1a1a;
+  --color-text-muted: #555555;
+  --color-bg: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-border: #d8d8d8;
+  --color-bubble-user: #f0f0f0;
+  --color-bubble-agent: #eef6f3;
+  --color-accent: #0072B2;
+  --color-accent-on: #ffffff;
+  --focus-color: #000000;
+  --radius: 10px;
+}
+
+[data-theme='dark'] {
+  --color-text: #f2f2f2;
+  --color-text-muted: #b8b8b8;
+  --color-bg: #121212;
+  --color-bg-elevated: #131820;
+  --color-border: #3a3a3a;
+  --color-bubble-user: #2a2a2a;
+  --color-bubble-agent: #16302a;
+  --color-accent: #56B4E9;
+  --color-accent-on: #05131a;
+  --focus-color: #ffffff;
+}
+
+/* === FIX ESTÉTICA: modo Alto Contraste ===
+   El bug original: --color-bubble-user y --color-bubble-agent eran los
+   dos #ffffff (idénticos entre sí Y casi idénticos al fondo del panel),
+   así que las burbujas se fundían entre ellas y con el panel — solo un
+   borde de 2px las separaba, y con el panel en glassmorphism (blur +
+   transparencia) ni siquiera ese borde se veía bien. Un modo que se
+   llama "alto contraste" no puede usar transparencia — por eso además
+   saco el blur/transparencia de .app__panel y .app__map-panel más abajo
+   (ver bloque "[data-theme='high-contrast'] .app__panel" al final de
+   esta sección). ===
+*/
+[data-theme='high-contrast'] {
+  --color-text: #000000;
+  --color-text-muted: #1a1a1a;
+  --color-bg: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-border: #000000;
+  /* Usuario y agente ahora se distinguen a simple vista: usuario en
+     negro sólido con texto blanco (como "hablando"), agente en blanco
+     con borde grueso negro (como "escuchando/respondiendo"). */
+  --color-bubble-user: #000000;
+  --color-bubble-agent: #ffffff;
+  --color-accent: #000000;
+  --color-accent-on: #ffffff;
+  --focus-color: #D55E00;
+  --radius: 4px;
+}
+
+/* Texto de la burbuja del usuario: blanco sobre su fondo negro sólido
+   (el resto de .chat-message__text hereda --color-text, que en este
+   tema es negro — correcto para la burbuja del agente, pero necesita
+   esta excepción para la del usuario). */
+[data-theme='high-contrast'] .chat-message--user .chat-message__body,
+[data-theme='high-contrast'] .chat-message--user .chat-message__text {
+  color: #ffffff;
+}
+
+[data-theme='high-contrast'] .chat-message__body,
+[data-theme='high-contrast'] .bus-row-card,
+[data-theme='high-contrast'] .empty-state__quick-actions .action-chip,
+[data-theme='high-contrast'] .pill-toggle,
+[data-theme='high-contrast'] .composer {
+  border: 2px solid #000000;
+}
+[data-theme='high-contrast'] .status-badge {
+  border: 2px solid #000000;
+}
+
+
+/* ============================================================
+   TAMAÑO DE LETRA
+   ============================================================ */
+html[data-font-size='normal'] { font-size: 100%; }
+html[data-font-size='large']  { font-size: 118.75%; }
+html[data-font-size='xlarge'] { font-size: 137.5%; }
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-x: hidden;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-bg) center top /cover fixed no-repeat;
+  overscroll-behavior-y: contain;
+}
+
+[data-theme='dark'] body {
+  background-color: #0b1220;
+  background-image: url('/bg-mode-dark-desktop.png');
+}
+
+[data-theme='high-contrast'] body {
+  background-color: #000000;
+  background-image: url('/bg-mode-light-desktop.png');
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: #000;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   ESTRUCTURA GENERAL
+   La navbar es fija, de ancho completo, independiente de la tarjeta
+   del chat. .app__panel deja de tener topbar adentro — solo conversación
+   + composer + footer, con margen arriba para no quedar tapado por la
+   navbar fija.
+
+   === NAVI-MAP: el padding-top que antes vivía en .app se movió a
+   .app__body (ver sección "AÑADIDO" al final del archivo), porque ahora
+   .app__body es quien centra la(s) tarjeta(s) — antes .app centraba
+   directamente a .app__panel, que era su único hijo. ===
+   ============================================================ */
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- Navbar: fija, ancho completo, fondo sólido ---------- */
+.app__navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  
+  padding: 0 1.5rem;
+  background: transparent;
+  border-bottom: none;
+
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
+}
+[data-theme='dark'] .app__navbar {
+  background: transparent;
+}
+[data-theme='high-contrast'] .app__navbar {
+  background: transparent;
+}
+
+.app__navbar--hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+.app__panel {
+  width: min(860px, calc(100% - 2rem));
+  height: min(calc(94dvh - 88px), 780px);
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 28px 110px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+[data-theme='dark'] .app__panel {
+  background: rgba(9, 14, 22, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+/* === FIX ESTÉTICA: acá está la regla que REALMENTE manda (por orden en
+   el archivo, esta pisaba al fix de más arriba en la sección de temas).
+   Alto contraste ahora es opaco de verdad, sin blur, con borde grueso —
+   ver comentario completo junto a los tokens de color al principio del
+   archivo. Misma opacidad total para .app__map-panel, así el mapa
+   también queda con un marco sólido y legible. === */
+[data-theme='high-contrast'] .app__panel,
+[data-theme='high-contrast'] .app__map-panel {
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 2px solid #000000;
+}
+
+.app__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
+}
+.app__brand-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.app__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.app__brand-name {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  margin: 0;
+  letter-spacing: 0.05em;
+  color: var(--color-text);
+}
+.app__brand-tagline {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mobile-settings {
+  display: none;
+  flex-shrink: 0;
+}
+
+/* Los 3 controles (tema, tamaño de letra, idioma) comparten exactamente
+   el mismo alto/relleno/radio — misma "pill" visual, mismo nivel de
+   jerarquía, para que no salte uno más grande que otro. */
+.pill-toggle,
+.language-select select {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pill-toggle[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-on);
+  border-color: transparent;
+}
+
+.pill-toggle__aa {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.language-select select {
+  min-width: 4.5rem;
+  font-weight: 700;
+}
+
+/* ---------- Área principal: conversación + composer ---------- */
+.app__main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 0.25rem;
+}
+
+/* Estado vacío: mascota + saludo + quick actions, centrados verticalmente
+   dentro del área de conversación — ocupa el mismo espacio donde después
+   van a aparecer los mensajes. */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+}
+.empty-state__copy h2 {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  line-height: 1.15;
+}
+.empty-state__copy p {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+.empty-state__quick-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.action-chip {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  padding: 0.7rem 1.05rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.action-chip:hover {
+  transform: translateY(-1px);
+}
+.action-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Lista de mensajes: crece de arriba hacia abajo dentro del área con
+   scroll; el auto-scroll (en ChatContainer) mantiene el último mensaje
+   pegado justo encima del composer. */
+.chat-window__log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.chat-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  max-width: 85%;
+}
+.chat-message--user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.chat-message--agent {
+  align-self: flex-start;
+}
+.chat-message__avatar {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+.chat-message__body {
+  padding: 0.8rem 1.05rem;
+  border-radius: 20px;
+  background: var(--color-bubble-agent);
+}
+.chat-message--user .chat-message__body {
+  background: var(--color-bubble-user);
+}
+.chat-message--loading {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+.chat-message__text {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.55;
+}
+.chat-message__rows {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.chat-message__stops {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* ---------- Composer: fijo abajo, siempre visible ---------- */
+.composer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  margin-top: 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+.composer input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 1rem;
+  min-height: 44px;
+}
+.composer input:focus {
+  outline: none;
+}
+.composer input:focus-visible {
+  outline: none;
+}
+
+.composer__submit {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-accent-on);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.composer__submit:disabled {
+  background: #b8b8b8;
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+/* ---------- Botón de voz ---------- */
+.voice-input {
+  position: relative;
+  flex-shrink: 0;
+}
+.voice-input__button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.voice-input__button--listening {
+  background: #D55E00;
+  color: #ffffff;
+  border-color: #D55E00;
+}
+.voice-input__error {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 0.4rem;
+  background: #D55E00;
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* ---------- Mascota ---------- */
+.navi-mascot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.navi-mascot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- Tarjeta de bus ---------- */
+.bus-row-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  background: var(--color-bg-elevated);
+}
+.bus-row-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.bus-row-card__line {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: var(--color-text);
+  color: var(--color-bg);
+  padding: 0.15rem 0.6rem;
+  border-radius: 6px;
+}
+.bus-row-card__stop {
+  margin: 0;
+  font-weight: 500;
+}
+.bus-row-card__direction {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.bus-row-card__badges {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+.bus-row-card__eta {
+  margin: 0.5rem 0 0;
+}
+.bus-row-card__eta-secondary {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+.bus-row-card__alert {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+.bus-row-card__freq {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.status-badge__symbol {
+  font-size: 0.9rem;
+}
+
+/* ---------- Footer ---------- */
+.app__footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+.app__footer p {
+  margin: 0;
+}
+.app__footer-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--color-text-muted);
+  font-size: 0.65rem;
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+
+  [data-theme='dark'] body {
+    background-image: url('/bg-mode-dark-mobile.png');
+    background-size: cover;
+  }
+
+  [data-theme='high-contrast'] body {
+    background-image: url('/bg-modo-alto-contraste-mobile.png');
+    background-size: cover;
+  }
+  .app__navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  }
+  .app__brand-tagline {
+    max-width: 140px;
+  }
+  .empty-state__copy h2 {
+    font-size: 1.7rem;
+  }
+  .chat-message {
+    max-width: 92%;
+  }
+  .pill-toggle__label {
+    display: none; /* en pantallas muy angostas, solo ícono, sin el texto del estado */
+  }
+  .app__controls {
+    display: none !important;
+  }
+  @media (max-width: 480px) {
+  .app__controls {
+    display: none !important;
+  }
+  .mobile-settings {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+
+    width: 40px;
+    height: 40px;
+
+    border: none;
+    border-radius: 50%;
+
+    background: transparent;
+    color: var(--color-text);
+
+    font-size: 1.4rem;
+    cursor: pointer;
+
+    flex-shrink: 0;
+  }
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 768px) {
+  [data-theme='dark'] body {
+    background-image: url('/bg-mode-dark-mobile.png');
+    background-size: cover;
+  }
+
+  [data-theme='high-contrast'] body {
+    background-image: url('/bg-mode-light-mobile.png');
+    background-size: cover;
+  }
+
+  .app__navbar {
+    height: auto;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    
+  }
+
+  .app__controls {
+    width: 100%;
+    justify-content: center;
+    margin-top: 6px;
+  }
+
+  .app__brand-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .app__brand-tagline {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    max-width: 160px;
+    line-height: 1.1;
+  }
+  .mobile-settings {
+  display: none;
+  }
+}
+
+/* ============================================================
+   === NAVI-MAP: AÑADIDO — todo lo de acá para abajo es nuevo. ===
+   Nada de lo anterior se borró; esta sección solo agrega el layout
+   necesario para que el mapa conviva con tu tarjeta de chat, respetando
+   el mismo lenguaje visual (tarjeta flotante, glassmorphism, pills).
+   ============================================================ */
+
+/* .app__body reemplaza el centrado que antes hacía .app directamente
+   sobre .app__panel (su único hijo). Ahora .app__body es el contenedor
+   que centra la(s) tarjeta(s) — 1 tarjeta (chat) cuando no hay mapa,
+   2 tarjetas lado a lado cuando el mapa está activo. */
+.app__body {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: calc(64px + 1.25rem) 1rem 1.5rem;
+}
+
+/* Tarjeta del mapa: mismas proporciones/sombra/radio que .app__panel,
+   para que sean "hermanas" visualmente. */
+.app__map-panel {
+  width: min(640px, calc(55% - 0.625rem));
+  height: min(calc(94dvh - 88px), 780px);
+  border-radius: 30px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 28px 110px rgba(0, 0, 0, 0.2);
+}
+
+/* Cuando el chat está oculto (vista "solo mapa"), el mapa ocupa el
+   espacio que antes usaba .app__panel solo. */
+.app__map-panel--solo {
+  width: min(1100px, calc(100% - 2rem));
+}
+
+/* Cuando ambas tarjetas están visibles a la vez ("split"), el chat se
+   angosta para dejarle más aire al mapa. */
+.app__panel--split {
+  width: min(420px, calc(45% - 0.625rem));
+}
+
+/* Ocultar sin desmontar: ni el chat (con su historial) ni el mapa (con
+   su instancia de MapLibre ya inicializada) se desmontan al cambiar de
+   vista — solo se ocultan con display:none. */
+.app__panel--hidden,
+.app__map-panel--hidden {
+  display: none;
+}
+
+/* Helper sin Tailwind para pasarle como className al componente <Map />,
+   ya que Map.tsx espera un className que le dé 100% de ancho/alto a su
+   contenedor. No se tocó Map.tsx. */
+.app__map-fill {
+  width: 100%;
+  height: 100%;
+}
+
+/* === FIX: Map.tsx (que no tocamos) trae hardcodeadas las clases de
+   Tailwind "relative", "h-full" y "w-full" en su propio JSX — no como
+   props que nosotros controlemos, sino escritas directo adentro del
+   componente. Mientras existía main.css (Tailwind) esas clases hacían
+   algo; al sacarlo para arreglar el lío del alto contraste, dejaron de
+   significar cualquier cosa y el <div> donde MapLibre se monta quedó
+   con 0px de alto → el mapa "desaparecía" en todos los temas por igual.
+   Estas 3 reglas replican exactamente lo que hacían esas clases de
+   Tailwind, sin traer Tailwind de vuelta. */
+.relative {
+  position: relative;
+}
+.h-full {
+  height: 100%;
+}
+.w-full {
+  width: 100%;
+}
+
+/* Selector de vista (Chat / Mapa / Ambos): mismo lenguaje "pill" que ya
+   usás para tema/idioma/tamaño de letra. */
+.view-switcher {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+}
+.view-switcher__btn {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.view-switcher__btn[aria-selected='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-on);
+}
+
+/* La versión fija-abajo solo se muestra en móvil (ver media query). */
+.view-switcher--mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* En móvil, chat y mapa se apilan verticalmente en vez de ir lado a
+     lado (no hay ancho para las dos tarjetas juntas). */
+  .app__body {
+    flex-direction: column;
+    padding-bottom: calc(1.5rem + 64px); /* espacio para el view-switcher fijo abajo */
+  }
+
+  .app__panel,
+  .app__map-panel {
+    width: calc(100% - 2rem);
+  }
+  .app__panel--split {
+    width: calc(100% - 2rem);
+    height: min(48dvh, 460px);
+  }
+  .app__map-panel {
+    height: min(42dvh, 420px);
+    order: -1; /* mapa arriba, chat abajo, cuando están juntos */
+  }
+  .app__map-panel--solo {
+    height: min(70dvh, 700px);
+  }
+
+  /* El selector de vista de escritorio (dentro de .app__controls) no
+     entra bien en el header angosto de móvil — se reemplaza por la
+     barra fija de abajo. */
+  .app__controls .view-switcher {
+    display: none;
+  }
+
+  .view-switcher--mobile {
+    display: flex;
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 50;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-elevated);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  }
+  .view-switcher--mobile .view-switcher__btn {
+    flex: 1;
+    text-align: center;
+  }
+}
