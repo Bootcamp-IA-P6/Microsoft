@@ -9,6 +9,8 @@
     "moduleDetection": "force",
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
+    "allowJs": true,       // ← AÑADIDO: acepta archivos .jsx/.js
+    "checkJs": false,      // ← AÑADIDO: pero sin analizarlos con TS estricto
     "paths": {
       "@/*": ["./src/*"]
     },
