@@ -187,8 +187,28 @@ def _mock_answer(question: str) -> str:
     )
 
 
+def _validate_feedback(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Valida y normaliza el payload de feedback entrante.
+    Retorna el payload limpio o lanza ValueError si es inválido.
+    """
+    msg_id = payload.get("message_id")
+    fb_type = payload.get("feedback_type")
+    if not msg_id:
+        raise ValueError("message_id es requerido")
+    if fb_type not in ("like", "dislike"):
+        raise ValueError("feedback_type debe ser 'like' o 'dislike'")
+    return {
+        "message_id": str(msg_id),
+        "feedback_type": fb_type,
+        "question": str(payload.get("question", "")),
+        "answer_text": str(payload.get("answer_text", "")),
+        "timestamp": int(payload.get("timestamp", time.time() * 1000)),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Registro de la User Data Function
+# Registro de las User Data Functions
 # ---------------------------------------------------------------------------
 
 udf = fn.UserDataFunctions()
@@ -216,3 +236,41 @@ async def chat(question: str, language: str) -> dict[str, Any]:
     except Exception as exc:
         print(f"[UDF] Error al llamar al Data Agent: {exc}")
         return _enrich_response(_mock_answer(question))
+
+
+@udf.function()
+def save_feedback(
+    message_id: str,
+    feedback_type: str,
+    question: str,
+    answer_text: str,
+    timestamp: int,
+) -> dict[str, Any]:
+    """
+    Recibe feedback del usuario (like/dislike) sobre una respuesta.
+    Por ahora persiste en logs; en producción conectar a una tabla
+    Fabric Lakehouse / Kusto / SQL.
+
+    Parámetros:
+        message_id    (str): ID único del mensaje en el frontend.
+        feedback_type (str): "like" o "dislike".
+        question      (str): Pregunta original del usuario.
+        answer_text   (str): Respuesta del agente.
+        timestamp     (int): Timestamp (ms) del mensaje original.
+
+    Retorna:
+        dict: {"status": "ok", "message_id": str}
+    """
+    payload = _validate_feedback({
+        "message_id": message_id,
+        "feedback_type": feedback_type,
+        "question": question,
+        "answer_text": answer_text,
+        "timestamp": timestamp,
+    })
+
+    print(f"[FEEDBACK] message_id={payload['message_id']} "
+          f"type={payload['feedback_type']} "
+          f"question={payload['question']!r} "
+          f"answer_len={len(payload['answer_text'])}")
+    return {"status": "ok", "message_id": payload["message_id"]}

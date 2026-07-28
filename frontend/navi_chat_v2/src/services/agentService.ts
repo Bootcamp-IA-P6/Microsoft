@@ -45,6 +45,55 @@ function parseChatResponse(responseData: unknown): ChatResponse {
   throw new Error('UDF respondió sin contenido válido');
 }
 
+export async function sendFeedbackToFabric(
+  messageId: string,
+  feedbackType: string,
+  question: string,
+  answerText: string,
+) {
+  const udfUrl = import.meta.env.VITE_UDF_PUBLIC_URL;
+  if (!udfUrl) {
+    throw new Error('VITE_UDF_PUBLIC_URL no está configurada');
+  }
+  const url = new URL(udfUrl);
+  const segments = url.pathname.split('/').filter(Boolean);
+  segments[segments.length - 2] = 'save_feedback';
+  url.pathname = '/' + segments.join('/');
+  const feedbackUrl = url.toString();
+
+  try {
+    const payload = {
+      messageid: messageId,
+      timestamp: Date.now().toString(),
+      feedbacktype: feedbackType,
+      question,
+      answertext: answerText,
+    };
+
+    const { acquireToken } = await import('./udfAuth');
+    const token = await acquireToken();
+
+    const res = await fetch(feedbackUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Error en el servidor: ${res.statusText}`);
+    }
+
+    const result = await res.json();
+    console.log('[FEEDBACK ENVIADO A FABRIC]:', result);
+    return result;
+  } catch (error) {
+    console.error('[ERROR ENVIANDO FEEDBACK]:', error);
+  }
+}
+
 export async function askAgent(question: string, language = 'es'): Promise<ChatResponse> {
   const udfUrl = import.meta.env.VITE_UDF_PUBLIC_URL;
   if (!udfUrl) {

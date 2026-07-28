@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ChatMessage from './ChatMessage';
 import NaviMascot from './NaviMascot'; // === NAVI-MAP: tu componente de mascota, reemplaza el <img icon-navi.svg> que había acá ===
-import { askAgent } from '@/services/agentService';
+import { askAgent, sendFeedbackToFabric } from '@/services/agentService';
 import type { ChatResponse, MapData } from '@/services/agentService';
 import { extractAllStops } from '@/services/parseStops';
 import { enrichStopQuery } from '@/utils/enrichQuery';
@@ -23,6 +23,7 @@ interface Message {
   matchedStops?: string[];
   timestamp: number;
   feedback?: 'like' | 'dislike' | null;
+  feedbackSent?: boolean;
   questionText?: string;
   mapData?: MapData | null;
 }
@@ -172,21 +173,14 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
 
   function handleSendFeedback(messageId: string, feedback: 'like' | 'dislike') {
     const msg = messages.find((m) => m.id === messageId);
-    if (!msg || msg.role !== 'agent') return;
-
-    const payload = {
-      messageId,
-      timestamp: msg.timestamp,
-      feedback,
-      pregunta: msg.questionText ?? '',
-      respuestaText: msg.text,
-    };
+    if (!msg || msg.role !== 'agent' || msg.feedbackSent) return;
 
     setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, feedback } : m))
+      prev.map((m) => (m.id === messageId ? { ...m, feedback, feedbackSent: true } : m))
     );
 
-    console.log('Feedback:', payload);
+    const feedbackType = feedback === 'like' ? 'Like' : 'Dislike';
+    sendFeedbackToFabric(messageId, feedbackType, msg.questionText ?? '', msg.text);
   }
 
   const hasMessages = messages.length > 0 || isLoading;
@@ -254,6 +248,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
                 matchedStops={msg.matchedStops}
                 timestamp={msg.timestamp}
                 feedback={msg.feedback}
+                feedbackSent={msg.feedbackSent}
                 onFeedback={handleSendFeedback}
                 mapData={msg.mapData}
               />
