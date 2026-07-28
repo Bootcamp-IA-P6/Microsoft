@@ -34,26 +34,12 @@
   --focus-color: #ffffff;
 }
 
-/* === FIX ESTÉTICA: modo Alto Contraste ===
-   El bug original: --color-bubble-user y --color-bubble-agent eran los
-   dos #ffffff (idénticos entre sí Y casi idénticos al fondo del panel),
-   así que las burbujas se fundían entre ellas y con el panel — solo un
-   borde de 2px las separaba, y con el panel en glassmorphism (blur +
-   transparencia) ni siquiera ese borde se veía bien. Un modo que se
-   llama "alto contraste" no puede usar transparencia — por eso además
-   saco el blur/transparencia de .app__panel y .app__map-panel más abajo
-   (ver bloque "[data-theme='high-contrast'] .app__panel" al final de
-   esta sección). ===
-*/
 [data-theme='high-contrast'] {
   --color-text: #000000;
   --color-text-muted: #1a1a1a;
   --color-bg: #ffffff;
   --color-bg-elevated: #ffffff;
   --color-border: #000000;
-  /* Usuario y agente ahora se distinguen a simple vista: usuario en
-     negro sólido con texto blanco (como "hablando"), agente en blanco
-     con borde grueso negro (como "escuchando/respondiendo"). */
   --color-bubble-user: #000000;
   --color-bubble-agent: #ffffff;
   --color-accent: #000000;
@@ -62,10 +48,6 @@
   --radius: 4px;
 }
 
-/* Texto de la burbuja del usuario: blanco sobre su fondo negro sólido
-   (el resto de .chat-message__text hereda --color-text, que en este
-   tema es negro — correcto para la burbuja del agente, pero necesita
-   esta excepción para la del usuario). */
 [data-theme='high-contrast'] .chat-message--user .chat-message__body,
 [data-theme='high-contrast'] .chat-message--user .chat-message__text {
   color: #ffffff;
@@ -81,7 +63,6 @@
 [data-theme='high-contrast'] .status-badge {
   border: 2px solid #000000;
 }
-
 
 /* ============================================================
    TAMAÑO DE LETRA
@@ -149,15 +130,6 @@ select:focus-visible {
 
 /* ============================================================
    ESTRUCTURA GENERAL
-   La navbar es fija, de ancho completo, independiente de la tarjeta
-   del chat. .app__panel deja de tener topbar adentro — solo conversación
-   + composer + footer, con margen arriba para no quedar tapado por la
-   navbar fija.
-
-   === NAVI-MAP: el padding-top que antes vivía en .app se movió a
-   .app__body (ver sección "AÑADIDO" al final del archivo), porque ahora
-   .app__body es quien centra la(s) tarjeta(s) — antes .app centraba
-   directamente a .app__panel, que era su único hijo. ===
    ============================================================ */
 .app {
   min-height: 100dvh;
@@ -166,7 +138,7 @@ select:focus-visible {
   align-items: center;
 }
 
-/* ---------- Navbar: fija, ancho completo, fondo sólido ---------- */
+/* ---------- Navbar: grid con 3 columnas ---------- */
 .app__navbar {
   position: fixed;
   top: 0;
@@ -174,10 +146,10 @@ select:focus-visible {
   right: 0;
   height: 64px;
   z-index: 50;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  
+
   padding: 0 1.5rem;
   background: transparent;
   border-bottom: none;
@@ -203,8 +175,8 @@ select:focus-visible {
   height: min(calc(94dvh - 88px), 780px);
   display: flex;
   flex-direction: column;
-  padding: 1.25rem;
-  border-radius: 30px;
+  padding: 1rem;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -217,12 +189,6 @@ select:focus-visible {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-/* === FIX ESTÉTICA: acá está la regla que REALMENTE manda (por orden en
-   el archivo, esta pisaba al fix de más arriba en la sección de temas).
-   Alto contraste ahora es opaco de verdad, sin blur, con borde grueso —
-   ver comentario completo junto a los tokens de color al principio del
-   archivo. Misma opacidad total para .app__map-panel, así el mapa
-   también queda con un marco sólido y legible. === */
 [data-theme='high-contrast'] .app__panel,
 [data-theme='high-contrast'] .app__map-panel {
   background: #ffffff;
@@ -236,7 +202,6 @@ select:focus-visible {
   align-items: center;
   gap: 0.65rem;
   min-width: 0;
-  flex: 1;
 }
 .app__brand-icon {
   width: 38px;
@@ -270,21 +235,27 @@ select:focus-visible {
 .app__controls {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.mobile-settings {
-  display: none;
-  flex-shrink: 0;
+.app__settings-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.app__settings-btn:hover {
+  background: var(--color-bubble-user);
 }
 
-/* Los 3 controles (tema, tamaño de letra, idioma) comparten exactamente
-   el mismo alto/relleno/radio — misma "pill" visual, mismo nivel de
-   jerarquía, para que no salte uno más grande que otro. */
-.pill-toggle,
-.language-select select {
+.pill-toggle {
   height: 40px;
   display: inline-flex;
   align-items: center;
@@ -312,8 +283,120 @@ select:focus-visible {
 }
 
 .language-select select {
-  min-width: 4.5rem;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  font-size: 0.82rem;
   font-weight: 700;
+  cursor: pointer;
+  min-width: 4.5rem;
+}
+
+/* ---------- Settings panel (overlay) ---------- */
+.settings-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: calc(64px + 0.5rem) 1rem 1rem;
+  animation: settingsFadeIn 0.15s ease;
+}
+@keyframes settingsFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.settings-panel__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+}
+.settings-panel__content {
+  position: relative;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+  min-width: 220px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: settingsSlideIn 0.15s ease;
+}
+@keyframes settingsSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+[data-theme='high-contrast'] .settings-panel__content {
+  border: 2px solid #000000;
+}
+.settings-panel__title {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+}
+.settings-panel__label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+.settings-panel__row {
+  display: flex;
+}
+.settings-panel__row--split {
+  gap: 8px;
+}
+.settings-panel__half {
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+.settings-panel__pill {
+  flex: 1;
+  justify-content: center;
+}
+.settings-panel__select select {
+  width: 100%;
+}
+
+.pill-toggle--active {
+  background: var(--color-accent);
+  color: var(--color-accent-on);
+  border-color: transparent;
+}
+
+.settings-panel__contrast-btn {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #1F2937;
+  font-weight: 700;
+}
+.settings-panel__contrast-btn:hover {
+  background: #f3f4f6;
+}
+.settings-panel__contrast-btn--active {
+  background: #000000;
+  color: #ffffff;
+  border: 1px solid #000000;
+}
+.settings-panel__contrast-btn--active:hover {
+  background: #1f2937;
+}
+
+@media (max-width: 768px) {
+  .settings-panel__content--mobile {
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* ---------- Área principal: conversación + composer ---------- */
@@ -334,9 +417,6 @@ select:focus-visible {
   padding: 1rem 0.25rem;
 }
 
-/* Estado vacío: mascota + saludo + quick actions, centrados verticalmente
-   dentro del área de conversación — ocupa el mismo espacio donde después
-   van a aparecer los mensajes. */
 .empty-state {
   flex: 1;
   display: flex;
@@ -383,9 +463,6 @@ select:focus-visible {
   transform: none;
 }
 
-/* Lista de mensajes: crece de arriba hacia abajo dentro del área con
-   scroll; el auto-scroll (en ChatContainer) mantiene el último mensaje
-   pegado justo encima del composer. */
 .chat-window__log {
   display: flex;
   flex-direction: column;
@@ -441,7 +518,48 @@ select:focus-visible {
   gap: 0.5rem;
 }
 
-/* ---------- Composer: fijo abajo, siempre visible ---------- */
+.chat-message__footer {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.chat-message__time {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.chat-message__feedback {
+  display: flex;
+  gap: 2px;
+}
+.chat-message__fb-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.chat-message__fb-btn:hover {
+  background: var(--color-bubble-user);
+}
+.chat-message__fb-btn--like {
+  color: #2e7d32;
+}
+.chat-message__fb-btn--dislike {
+  color: #c62828;
+}
+
+/* ---------- Composer ---------- */
 .composer {
   flex-shrink: 0;
   display: flex;
@@ -634,125 +752,9 @@ select:focus-visible {
   justify-content: center;
 }
 
-@media (max-width: 480px) {
-
-  [data-theme='dark'] body {
-    background-image: url('/bg-mode-dark-mobile.png');
-    background-size: cover;
-  }
-
-  [data-theme='high-contrast'] body {
-    background-image: url('/bg-modo-alto-contraste-mobile.png');
-    background-size: cover;
-  }
-  .app__navbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  }
-  .app__brand-tagline {
-    max-width: 140px;
-  }
-  .empty-state__copy h2 {
-    font-size: 1.7rem;
-  }
-  .chat-message {
-    max-width: 92%;
-  }
-  .pill-toggle__label {
-    display: none; /* en pantallas muy angostas, solo ícono, sin el texto del estado */
-  }
-  .app__controls {
-    display: none !important;
-  }
-  @media (max-width: 480px) {
-  .app__controls {
-    display: none !important;
-  }
-  .mobile-settings {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-
-    border: none;
-    border-radius: 50%;
-
-    background: transparent;
-    color: var(--color-text);
-
-    font-size: 1.4rem;
-    cursor: pointer;
-
-    flex-shrink: 0;
-  }
-}
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
-@media (max-width: 768px) {
-  [data-theme='dark'] body {
-    background-image: url('/bg-mode-dark-mobile.png');
-    background-size: cover;
-  }
-
-  [data-theme='high-contrast'] body {
-    background-image: url('/bg-mode-light-mobile.png');
-    background-size: cover;
-  }
-
-  .app__navbar {
-    height: auto;
-    padding: 10px 16px;
-    flex-wrap: wrap;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    
-  }
-
-  .app__controls {
-    width: 100%;
-    justify-content: center;
-    margin-top: 6px;
-  }
-
-  .app__brand-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .app__brand-tagline {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
-    max-width: 160px;
-    line-height: 1.1;
-  }
-  .mobile-settings {
-  display: none;
-  }
-}
-
 /* ============================================================
-   === NAVI-MAP: AÑADIDO — todo lo de acá para abajo es nuevo. ===
-   Nada de lo anterior se borró; esta sección solo agrega el layout
-   necesario para que el mapa conviva con tu tarjeta de chat, respetando
-   el mismo lenguaje visual (tarjeta flotante, glassmorphism, pills).
+   LAYOUT: app__body, map-panel, panels, view-switcher
    ============================================================ */
-
-/* .app__body reemplaza el centrado que antes hacía .app directamente
-   sobre .app__panel (su único hijo). Ahora .app__body es el contenedor
-   que centra la(s) tarjeta(s) — 1 tarjeta (chat) cuando no hay mapa,
-   2 tarjetas lado a lado cuando el mapa está activo. */
 .app__body {
   width: 100%;
   flex: 1;
@@ -760,58 +762,51 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.25rem;
-  padding: calc(64px + 1.25rem) 1rem 1.5rem;
+  gap: 24px;
+  padding: calc(64px + 24px) 24px 24px;
 }
 
-/* Tarjeta del mapa: mismas proporciones/sombra/radio que .app__panel,
-   para que sean "hermanas" visualmente. */
 .app__map-panel {
   width: min(640px, calc(55% - 0.625rem));
   height: min(calc(94dvh - 88px), 780px);
-  border-radius: 30px;
+  border-radius: 20px;
   overflow: hidden;
+  isolation: isolate;
   flex-shrink: 0;
   box-shadow: 0 28px 110px rgba(0, 0, 0, 0.2);
 }
 
-/* Cuando el chat está oculto (vista "solo mapa"), el mapa ocupa el
-   espacio que antes usaba .app__panel solo. */
 .app__map-panel--solo {
   width: min(1100px, calc(100% - 2rem));
 }
 
-/* Cuando ambas tarjetas están visibles a la vez ("split"), el chat se
-   angosta para dejarle más aire al mapa. */
 .app__panel--split {
   width: min(420px, calc(45% - 0.625rem));
 }
 
-/* Ocultar sin desmontar: ni el chat (con su historial) ni el mapa (con
-   su instancia de MapLibre ya inicializada) se desmontan al cambiar de
-   vista — solo se ocultan con display:none. */
 .app__panel--hidden,
 .app__map-panel--hidden {
   display: none;
 }
 
-/* Helper sin Tailwind para pasarle como className al componente <Map />,
-   ya que Map.tsx espera un className que le dé 100% de ancho/alto a su
-   contenedor. No se tocó Map.tsx. */
 .app__map-fill {
   width: 100%;
   height: 100%;
 }
 
-/* === FIX: Map.tsx (que no tocamos) trae hardcodeadas las clases de
-   Tailwind "relative", "h-full" y "w-full" en su propio JSX — no como
-   props que nosotros controlemos, sino escritas directo adentro del
-   componente. Mientras existía main.css (Tailwind) esas clases hacían
-   algo; al sacarlo para arreglar el lío del alto contraste, dejaron de
-   significar cualquier cosa y el <div> donde MapLibre se monta quedó
-   con 0px de alto → el mapa "desaparecía" en todos los temas por igual.
-   Estas 3 reglas replican exactamente lo que hacían esas clases de
-   Tailwind, sin traer Tailwind de vuelta. */
+.map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  overflow: hidden !important;
+  isolation: isolate;
+  contain: paint;
+}
+.map-wrapper canvas {
+  border-radius: 20px !important;
+}
+
 .relative {
   position: relative;
 }
@@ -822,8 +817,7 @@ select:focus-visible {
   width: 100%;
 }
 
-/* Selector de vista (Chat / Mapa / Ambos): mismo lenguaje "pill" que ya
-   usás para tema/idioma/tamaño de letra. */
+/* Selector de vista */
 .view-switcher {
   display: inline-flex;
   gap: 2px;
@@ -848,40 +842,111 @@ select:focus-visible {
   color: var(--color-accent-on);
 }
 
-/* La versión fija-abajo solo se muestra en móvil (ver media query). */
+.view-switcher--desktop {
+  display: flex;
+}
+
 .view-switcher--mobile {
   display: none;
 }
 
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 480px) {
+  [data-theme='dark'] body {
+    background-image: url('/bg-mode-dark-mobile.png');
+    background-size: cover;
+  }
+
+  [data-theme='high-contrast'] body {
+    background-image: url('/bg-modo-alto-contraste-mobile.png');
+    background-size: cover;
+  }
+
+  .app__brand-tagline {
+    max-width: 140px;
+  }
+  .empty-state__copy h2 {
+    font-size: 1.7rem;
+  }
+  .chat-message {
+    max-width: 92%;
+  }
+}
+
 @media (max-width: 768px) {
-  /* En móvil, chat y mapa se apilan verticalmente en vez de ir lado a
-     lado (no hay ancho para las dos tarjetas juntas). */
+  [data-theme='dark'] body {
+    background-image: url('/bg-mode-dark-mobile.png');
+    background-size: cover;
+  }
+
+  [data-theme='high-contrast'] body {
+    background-image: url('/bg-mode-light-mobile.png');
+    background-size: cover;
+  }
+
+  .app__navbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 16px;
+    height: 56px;
+  }
+
+  .app__brand-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .app__brand-tagline {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    max-width: 140px;
+    line-height: 1.1;
+  }
+
+  .app__brand-name {
+    font-size: 1rem;
+  }
+
+  .view-switcher--desktop {
+    display: none;
+  }
+
+  .settings-panel {
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .settings-panel__content {
+    width: 100%;
+    max-width: 340px;
+  }
+
   .app__body {
     flex-direction: column;
-    padding-bottom: calc(1.5rem + 64px); /* espacio para el view-switcher fijo abajo */
+    padding-bottom: calc(24px + 64px);
+    padding-left: 16px;
+    padding-right: 16px;
+    gap: 16px;
   }
 
   .app__panel,
   .app__map-panel {
-    width: calc(100% - 2rem);
+    width: calc(100% - 0px);
   }
   .app__panel--split {
-    width: calc(100% - 2rem);
+    width: calc(100% - 0px);
     height: min(48dvh, 460px);
   }
   .app__map-panel {
     height: min(42dvh, 420px);
-    order: -1; /* mapa arriba, chat abajo, cuando están juntos */
+    order: -1;
   }
   .app__map-panel--solo {
     height: min(70dvh, 700px);
-  }
-
-  /* El selector de vista de escritorio (dentro de .app__controls) no
-     entra bien en el header angosto de móvil — se reemplaza por la
-     barra fija de abajo. */
-  .app__controls .view-switcher {
-    display: none;
   }
 
   .view-switcher--mobile {
@@ -904,5 +969,12 @@ select:focus-visible {
   .view-switcher--mobile .view-switcher__btn {
     flex: 1;
     text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
   }
 }

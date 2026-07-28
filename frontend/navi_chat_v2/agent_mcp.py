@@ -23,7 +23,7 @@ import time
 from azure.identity import AzureCliCredential
 from dotenv import load_dotenv
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -72,7 +72,7 @@ class EMTAgentMCP:
         return self._tool_name
 
     async def ask(self, question: str, verbose: bool = False) -> str:
-        async with streamablehttp_client(self.mcp_url, headers=self._get_headers()) as (read, write, _):
+        async with streamable_http_client(self.mcp_url, headers=self._get_headers()) as (read, write, _):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 tool_name = await self._resolve_tool_name(session)

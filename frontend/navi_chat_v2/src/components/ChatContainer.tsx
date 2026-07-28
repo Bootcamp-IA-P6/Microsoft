@@ -2,9 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import ChatMessage from './ChatMessage';
 import NaviMascot from './NaviMascot'; // === NAVI-MAP: tu componente de mascota, reemplaza el <img icon-navi.svg> que había acá ===
 import { askAgent } from '@/services/agentService';
-import type { ChatResponse } from '@/services/agentService';
+import type { ChatResponse, MapData } from '@/services/agentService';
 import { extractAllStops } from '@/services/parseStops';
 import { enrichStopQuery } from '@/utils/enrichQuery';
+import { getStopCoords, getRouteLineString } from '@/utils/geoData';
 import type { Lang } from '@/i18n/translations';
 import { t, speechLang } from '@/i18n/translations';
 
@@ -20,6 +21,10 @@ interface Message {
   role: 'user' | 'agent';
   text: string;
   matchedStops?: string[];
+  timestamp: number;
+  feedback?: 'like' | 'dislike' | null;
+  questionText?: string;
+  mapData?: MapData | null;
 }
 
 export interface FlyTarget {
@@ -89,10 +94,13 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
   async function handleSend(question: string) {
     if (!question.trim() || isLoading) return;
 
+    const now = Date.now();
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       text: question,
+      timestamp: now,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -106,27 +114,79 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
 
     try {
       const enriched = enrichStopQuery(question);
-      const { answerText }: ChatResponse = await askAgent(enriched, language);
+      const response: ChatResponse = await askAgent(enriched, language);
+      const answerText = response.chat_message.text;
+      const mapData = response.map_data;
       const matchedStops = extractAllStops(answerText, question);
+
+      let resolvedMapData = mapData;
+      if (!resolvedMapData && response.chat_message.stop_id) {
+        const stopCoords = getStopCoords(response.chat_message.stop_name || response.chat_message.stop_id);
+        if (stopCoords) {
+          const routeGeoJSON = getRouteLineString(
+            response.chat_message.line_number || '',
+            stopCoords,
+          );
+          resolvedMapData = {
+            type: 'bus_stop_and_route',
+            stop_coordinates: stopCoords,
+            route_geojson: routeGeoJSON ?? undefined,
+          };
+        }
+      }
 
       const agentMsg: Message = {
         id: crypto.randomUUID(),
         role: 'agent',
         text: answerText,
         matchedStops,
+        timestamp: Date.now(),
+        questionText: question,
+        mapData: resolvedMapData,
       };
       setMessages((prev) => [...prev, agentMsg]);
+
+      if (resolvedMapData?.stop_coordinates) {
+        window.dispatchEvent(new CustomEvent('map:showRoute', {
+          detail: {
+            stopCoordinates: resolvedMapData.stop_coordinates,
+            stopName: response.chat_message.stop_name,
+            routeGeoJSON: resolvedMapData.route_geojson,
+          },
+        }));
+      }
     } catch {
       const errorMsg: Message = {
         id: crypto.randomUUID(),
         role: 'agent',
         text: t(language, 'error'),
+        timestamp: Date.now(),
+        questionText: question,
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
     }
+  }
+
+  function handleSendFeedback(messageId: string, feedback: 'like' | 'dislike') {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg || msg.role !== 'agent') return;
+
+    const payload = {
+      messageId,
+      timestamp: msg.timestamp,
+      feedback,
+      pregunta: msg.questionText ?? '',
+      respuestaText: msg.text,
+    };
+
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, feedback } : m))
+    );
+
+    console.log('Feedback:', payload);
   }
 
   const hasMessages = messages.length > 0 || isLoading;
@@ -186,7 +246,17 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
         ) : (
           <div className="chat-window__log" role="log" aria-live="polite" aria-relevant="additions">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} role={msg.role} text={msg.text} matchedStops={msg.matchedStops} />
+              <ChatMessage
+                key={msg.id}
+                messageId={msg.id}
+                role={msg.role}
+                text={msg.text}
+                matchedStops={msg.matchedStops}
+                timestamp={msg.timestamp}
+                feedback={msg.feedback}
+                onFeedback={handleSendFeedback}
+                mapData={msg.mapData}
+              />
             ))}
             {isLoading && (
               <div className="chat-message chat-message--agent chat-message--loading">

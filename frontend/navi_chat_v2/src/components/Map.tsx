@@ -47,6 +47,7 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
   const mapRef = useRef<maplibregl.Map | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
 
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return;
@@ -186,8 +187,42 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
     return () => window.removeEventListener('map:flyTo', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const map = mapRef.current;
+      if (!map) return;
+
+      const { stopCoordinates, stopName } = (e as CustomEvent).detail;
+      if (!stopCoordinates) return;
+
+      markerRef.current?.remove();
+      const marker = new maplibregl.Marker({ element: createMarkerEl() })
+        .setLngLat(stopCoordinates)
+        .addTo(map);
+      markerRef.current = marker;
+
+      popupRef.current?.remove();
+      const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
+        .setLngLat(stopCoordinates)
+        .setHTML(`<strong>${stopName || 'Parada'}</strong>`)
+        .addTo(map);
+      popupRef.current = popup;
+
+      map.flyTo({
+        center: stopCoordinates,
+        zoom: 16.5,
+        pitch: 50,
+        bearing: -10,
+        duration: 2000,
+      });
+    };
+
+    window.addEventListener('map:showRoute', handler);
+    return () => window.removeEventListener('map:showRoute', handler);
+  }, []);
+
   return (
-    <div ref={wrapperRef} className={`relative ${className}`}>
+    <div ref={wrapperRef} className={`relative map-wrapper ${className}`}>
       <div ref={mapContainer} className="h-full w-full" />
     </div>
   );
