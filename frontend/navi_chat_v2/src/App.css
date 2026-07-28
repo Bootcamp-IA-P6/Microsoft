@@ -88,6 +88,10 @@ body {
   overscroll-behavior-y: contain;
 }
 
+[data-theme='light'] body {
+  background-color: #f5f5f5;
+  background-image: url('/bg-mode-light-desktop.png');
+}
 [data-theme='dark'] body {
   background-color: #0b1220;
   background-image: url('/bg-mode-dark-desktop.png');
@@ -168,6 +172,11 @@ select:focus-visible {
 .app__navbar--hidden {
   transform: translateY(-100%);
   opacity: 0;
+}
+.app__navbar--main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .app__panel {
@@ -384,12 +393,12 @@ select:focus-visible {
   background: #f3f4f6;
 }
 .settings-panel__contrast-btn--active {
-  background: #000000;
-  color: #ffffff;
-  border: 1px solid #000000;
+  background: #e0e7ff;
+  color: #004b87;
+  border: 1.5px solid #004b87;
 }
 .settings-panel__contrast-btn--active:hover {
-  background: #1f2937;
+  background: #c7d2fe;
 }
 
 @media (max-width: 768px) {
@@ -448,22 +457,28 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-bg-elevated);
+  border: 1px solid #d0d5dd;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #ffffff, #f0f4f8);
   color: var(--color-text);
-  padding: 0.55rem 1.05rem;
+  padding: 0.55rem 1.1rem;
   font-size: 0.92rem;
   cursor: pointer;
-  transition: transform 120ms ease, background-color 120ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+.action-chip svg {
+  stroke: #004b87;
 }
 .action-chip:hover {
-  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 75, 135, 0.12), 0 2px 6px rgba(0, 75, 135, 0.08);
+  transform: translateY(-2px);
 }
 .action-chip:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .chat-window__log {
@@ -866,6 +881,10 @@ select:focus-visible {
    RESPONSIVE
    ============================================================ */
 @media (max-width: 480px) {
+  [data-theme='light'] body {
+    background-image: url('/bg-mode-light-mobile.png');
+    background-size: cover;
+  }
   [data-theme='dark'] body {
     background-image: url('/bg-mode-dark-mobile.png');
     background-size: cover;
@@ -888,6 +907,10 @@ select:focus-visible {
 }
 
 @media (max-width: 768px) {
+  [data-theme='light'] body {
+    background-image: url('/bg-mode-light-mobile.png');
+    background-size: cover;
+  }
   [data-theme='dark'] body {
     background-image: url('/bg-mode-dark-mobile.png');
     background-size: cover;

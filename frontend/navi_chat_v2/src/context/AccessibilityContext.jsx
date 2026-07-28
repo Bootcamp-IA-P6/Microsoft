@@ -11,7 +11,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 // entorno de preview con restricciones de storage.
 
 /**
- * @typedef {'dark' | 'high-contrast'} Theme
+ * @typedef {'light' | 'dark' | 'high-contrast'} Theme
  * @typedef {'normal' | 'large' | 'xlarge'} FontSize
  * @typedef {{ theme: Theme; fontSize: FontSize; setTheme: (theme: Theme) => void; setFontSize: (fontSize: FontSize) => void; }} AccessibilityContextValue
  */
@@ -21,18 +21,17 @@ const STORAGE_KEY = 'navi:accessibility-prefs';
 const AccessibilityContext = createContext(/** @type {AccessibilityContextValue | null} */ (null));
 
 function loadInitialPrefs() {
-  const fallback = { theme: 'dark', fontSize: 'normal' };
+  const fallback = { theme: 'light', fontSize: 'normal' };
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed.theme === 'light') parsed.theme = 'dark';
       return { ...fallback, ...parsed };
     }
   } catch {
     // localStorage puede fallar en modo privado estricto; seguimos con el default.
   }
-  return { ...fallback, theme: 'dark' };
+  return { ...fallback, theme: 'light' };
 }
 
 export function AccessibilityProvider({ children }) {
@@ -49,7 +48,7 @@ export function AccessibilityProvider({ children }) {
   }, [prefs]);
 
   function setTheme(theme) {
-    if (theme === 'dark' || theme === 'high-contrast') {
+    if (theme === 'light' || theme === 'dark' || theme === 'high-contrast') {
       setPrefs((p) => ({ ...p, theme }));
     }
   }

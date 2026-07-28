@@ -74,7 +74,7 @@ function AppShell() {
 
   return (
     <div className="app">
-      <header className="app__navbar">
+      <header className={`app__navbar${!isMapVisible ? ' app__navbar--main' : ''}`}>
         <div className="app__brand">
           <img src="/icon-navi.svg" alt="" className="app__brand-icon" />
           <div className="app__brand-text">
@@ -134,15 +134,15 @@ function AppShell() {
             <div className="settings-panel__row settings-panel__row--split">
               <button
                 type="button"
-                className={`settings-panel__half settings-panel__contrast-btn ${theme !== 'high-contrast' ? 'settings-panel__contrast-btn--active' : ''}`}
-                onClick={() => setTheme('dark')}
+                className={`settings-panel__half settings-panel__contrast-btn ${theme === 'light' ? 'settings-panel__contrast-btn--active' : ''}`}
+                onClick={() => setTheme('light')}
               >
                 <span>{t('themeNormal')}</span>
               </button>
               <button
                 type="button"
-                className={`settings-panel__half settings-panel__contrast-btn ${theme === 'high-contrast' ? 'settings-panel__contrast-btn--active' : ''}`}
-                onClick={() => setTheme('high-contrast')}
+                className={`settings-panel__half settings-panel__contrast-btn ${theme === 'dark' ? 'settings-panel__contrast-btn--active' : ''}`}
+                onClick={() => setTheme('dark')}
               >
                 <span>{t('themeHighContrast')}</span>
               </button>
