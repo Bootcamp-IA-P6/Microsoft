@@ -1,8 +1,8 @@
 # Contexto: Data Agent + Semantic → Eventhouse
 
-**Fecha:** 2026-07-24  
+**Fecha:** 2026-07-28  
 **Público:** quien configure Data Agent y/o la capa semántica  
-**Contrato lógico:** [data-source-contract-v4.md](./data-source-contract-v4.md) v4.3.1 
+**Contrato lógico:** [data-source-contract-v4.md](./data-source-contract-v4.md) **v4.4**
 
 ---
 
@@ -10,16 +10,16 @@
 
 El hot path ya escribe en **Eventhouse**. El Data Agent (y el semantic layer) deben usar como SoT **`gold_emt_stop_line` en Eventhouse**, no el gold del Lakehouse.
 
-El esquema lógico (columnas, grain, US) **no cambia**. Solo cambia la ubicación física del serving.
+Grain y ownership arrives/alerts **igual**. Desde **v4.4** Gold también sirve **coordenadas de mapa** (`stop_lat`/`stop_lon`, `bus_lat_1/2`, `bus_lon_1/2`) para el mapa 3D / frontend sin mocks estáticos. Detalle operativo: [phase4-rti.md](./phase4-rti.md).
 
-No hace falta comparar Lakehouse gold vs Eventhouse gold antes de trabajar: silver y gold en EH ya están disponibles.
+No hace falta comparar Lakehouse gold vs Eventhouse gold antes de trabajar: silver y gold en EH ya están disponibles. Las columnas de mapa están **primero en EH**; parity Lakehouse no es requisito del Agent.
 
 ---
 
 ## Arquitectura actual
 
 ```text
-[1×/día]  Notebook bootstrap GTFS → Lakehouse silver_arrives (catálogo)
+[1×/día]  Notebook bootstrap GTFS → Lakehouse silver_arrives (catálogo + stop_lat/lon)
                  ↑
           La UDF solo LEE el catálogo / scope vía SQL del Lakehouse
 
@@ -28,10 +28,10 @@ No hace falta comparar Lakehouse gold vs Eventhouse gold antes de trabajar: silv
     → Eventstream 
     → Eventhouse:
          bronze_emt_raw
-         silver_arrives
+         silver_arrives   (+ bus_lat/bus_lon desde Arrive.geometry)
          silver_alerts
     → KQL apply gold
-         gold_emt_stop_line   ← SoT para Agent / Semantic
+         gold_emt_stop_line   ← SoT para Agent / Semantic / mapa
 ```
 
 | Componente | Dónde | Ubicación |
@@ -39,7 +39,7 @@ No hace falta comparar Lakehouse gold vs Eventhouse gold antes de trabajar: silv
 | Bootstrap GTFS | Lakehouse (pipeline + notebook), ~09:00 | base/nb_bootstrap_gtfs_silver_0 |
 | Lectura de catálogo / scope | Lakehouse (`silver_arrives`) — solo la UDF | ./lh_emt_madrid |
 | Ingesta arrives / alerts | UDF → Eventstream → Eventhouse | phase4/udf_emt_ingest <br>phase4/es_emt_* <br>phase4/eh_emt_madrid/db_emt |
-| Serving Agent / Semantic | **Eventhouse `gold_emt_stop_line`** | |
+| Serving Agent / Semantic / mapa | **Eventhouse `gold_emt_stop_line`** | |
 | Rollback (path antiguo) | Lakehouse — no es SoT del Agent | |
 
 ---
@@ -51,9 +51,9 @@ En el explorador KQL verás **cuatro tablas** con estos nombres. Eso es correcto
 | Tabla | Rol | ¿La ve el Agent? |
 |-------|-----|------------------|
 | `bronze_emt_raw` | Raw ingest | **No** |
-| `silver_arrives` | Hechos de poll / material de frecuencia | **No** |
+| `silver_arrives` | Hechos de poll / material de frecuencia (+ coords bus) | **No** |
 | `silver_alerts` | Snapshot de alertas | **No** |
-| `gold_emt_stop_line` | Serving (US-01, 02, 07, 08, …) | **Sí — único SoT de dominio** |
+| `gold_emt_stop_line` | Serving (US-01, 02, 07, 08, mapa, …) | **Sí — único SoT de dominio** |
 
 Nombres de ítem por defecto en docs (ajustar al portal si difieren):
 
@@ -66,12 +66,14 @@ Nombres de ítem por defecto en docs (ajustar al portal si difieren):
 
 1. Conectar el datasource al KQL DB de Eventhouse y exponer **`gold_emt_stop_line`** (o un semantic que solo lea esa tabla).
 2. **No** conectar bronze ni silver al Agent ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)).
-3. Few-shots / instrucciones: mismas columnas que el contrato:
+3. Few-shots / instrucciones: mismas columnas que el contrato v4.4:
    - ETA: `eta_seconds_1/2`, `bus_id_1/2`, `has_upcoming_bus`, `is_stale`
+   - Mapa: `stop_lat`/`stop_lon`; buses vivos `bus_lat_1`/`bus_lon_1`, `bus_lat_2`/`bus_lon_2` (asociados a `bus_id_1/2`; NULL si no hay geometry)
    - Alertas: `alert_active`, `alert_header`, `alert_cause`, `alert_effect`, `alert_url` (grano `line_id`, replicado por fila stop×direction)
    - Frecuencia: `freq_observed_*`, `freq_sample_size_*`, `day_type`
    - PK: `(stop_id, line_id, direction_id)`
 4. `is_stale`: el apply actual usa **900 s** (`gold_emt_stop_line_build(900)` en `rti/kql/06_apply_gold.kql`). El contrato ADR-028 habla de **180 s**. Alinear expectativas del Agent al valor real del apply (o cambiar el apply a 180 más adelante).
+5. Coords: lat ≈ 40.4x, lon ≈ −3.7x en el geofence Sol. Si el Agent/mapa ve lon/lat intercambiados, el bug es de consumo (API = `[lon, lat]`).
 
 ---
 
@@ -81,8 +83,14 @@ Nombres de ítem por defecto en docs (ajustar al portal si difieren):
 2. No meter KPI / quality logs dentro de las columnas de dominio Gold ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)).
 3. Si el Agent lee el Semantic: el Semantic apunta a **EH gold**, no al Lakehouse.
 4. No exponer Silver en el Semantic de serving.
-5. Consultar la historia de usuario: [enlace](https://docs.google.com/document/d/16bHtctB5ErOt3-3k4wkkNDAG9nX1HqJzbdtSrEMEPpI/edit?tab=t.psozsyssj9on#heading=h.uf0ozq2nmxrg)
+5. Incluir medidas/columnas de mapa si el producto 3D las necesita (`stop_*`, `bus_*_1/2`).
+6. Consultar la historia de usuario: [enlace](https://docs.google.com/document/d/16bHtctB5ErOt3-3k4wkkNDAG9nX1HqJzbdtSrEMEPpI/edit?tab=t.psozsyssj9on#heading=h.uf0ozq2nmxrg)
 
+---
+
+## Ops note (schema evolve)
+
+Tras añadir columnas a Gold en KQL: `.create-merge` **añade al final**. Si el `project` del build usa otro orden, `.set-or-replace` falla con *Query schema does not match table schema*. Remedio: drop + recrear `gold_emt_stop_line` con `rti/kql/04` y volver a apply (Silver intacto; Gold es rebuild). Ver [phase4-rti.md](./phase4-rti.md).
 
 ---
 
@@ -90,8 +98,8 @@ Nombres de ítem por defecto en docs (ajustar al portal si difieren):
 
 | Documento / código | Uso |
 |--------------------|-----|
-| [data-source-contract-v4.md](./data-source-contract-v4.md) | Columnas, grain, US |
-| [phase4-rti.md](./phase4-rti.md) | Operación UDF / Eventstream / EH |
+| [data-source-contract-v4.md](./data-source-contract-v4.md) | Columnas, grain, US (v4.4) |
+| [phase4-rti.md](./phase4-rti.md) | Operación UDF / Eventstream / EH / map coords deploy |
 | [ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md) | Semantic fuera del Gold de dominio |
 | `rti/kql/01`–`06` | DDL, gold build, apply |
 | `rti/udf/udf_emt_ingest.py` | Poller → Eventstream |

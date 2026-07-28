@@ -41,6 +41,23 @@ def map_destination_to_direction(destination: str | None, name_a, name_b) -> int
     return None
 
 
+def parse_arrive_geometry(geom: Any) -> tuple[float | None, float | None]:
+    """GeoJSON Point → (bus_lat, bus_lon). coordinates are [lon, lat]."""
+    if not isinstance(geom, dict):
+        return None, None
+    coords = geom.get("coordinates")
+    if not isinstance(coords, (list, tuple)) or len(coords) < 2:
+        return None, None
+    try:
+        lon = float(coords[0])
+        lat = float(coords[1])
+    except (TypeError, ValueError):
+        return None, None
+    if lon != lon or lat != lat:
+        return None, None
+    return lat, lon
+
+
 def parse_api_datetime_to_utc_naive(raw) -> datetime | None:
     if raw is None or raw == "":
         return None
@@ -116,6 +133,7 @@ def expand_arrives_bronze(
                         break
             if direction_id is None:
                 map_ok = False
+            bus_lat, bus_lon = parse_arrive_geometry(arr.get("geometry"))
             candidates.append(
                 {
                     "_rk": sha_rk(sid, line_id, direction_id, bus_id, dt_poll),
@@ -126,6 +144,8 @@ def expand_arrives_bronze(
                     "bus_id": bus_id,
                     "destination": destination,
                     "eta_seconds": eta,
+                    "bus_lat": bus_lat,
+                    "bus_lon": bus_lon,
                     "datetime_polling": dt_poll.isoformat(sep="T", timespec="seconds") + "Z",
                     "ingested_at": ingested_at.isoformat(sep="T", timespec="seconds") + "Z"
                     if isinstance(ingested_at, datetime)
@@ -161,6 +181,8 @@ def expand_arrives_bronze(
                     "bus_id": None,
                     "destination": None,
                     "eta_seconds": None,
+                    "bus_lat": None,
+                    "bus_lon": None,
                     "datetime_polling": dt_poll.isoformat(sep="T", timespec="seconds") + "Z",
                     "ingested_at": ingested_at.isoformat(sep="T", timespec="seconds") + "Z"
                     if isinstance(ingested_at, datetime)
@@ -261,10 +283,16 @@ def build_gold_eta_rows(
                 "name_a": head.get("name_a"),
                 "name_b": head.get("name_b"),
                 "destination": dest,
+                "stop_lat": head.get("stop_lat"),
+                "stop_lon": head.get("stop_lon"),
                 "eta_seconds_1": eta1,
                 "bus_id_1": bus1,
+                "bus_lat_1": buses[0].get("bus_lat") if buses else None,
+                "bus_lon_1": buses[0].get("bus_lon") if buses else None,
                 "eta_seconds_2": eta2,
                 "bus_id_2": bus2,
+                "bus_lat_2": buses[1].get("bus_lat") if len(buses) > 1 else None,
+                "bus_lon_2": buses[1].get("bus_lon") if len(buses) > 1 else None,
                 "has_upcoming_bus": eta1 is not None,
                 "is_stale": is_stale,
                 "origin_stop_notice": bool(head.get("is_terminus")) and eta1 is None,

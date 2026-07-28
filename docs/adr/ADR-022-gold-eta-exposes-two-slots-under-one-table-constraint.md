@@ -26,4 +26,4 @@ Adopt **B** (team agreement after design review; option B). Slot 1 is the sooner
 
 ## 5. Amended / Superseded by
 
-- None at time of writing.
+- Extended by [ADR-039](ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md): the same two ETA slots also carry `bus_lat_1/2` and `bus_lon_1/2`.

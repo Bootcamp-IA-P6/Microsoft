@@ -105,6 +105,23 @@ def _to_int(v):
             return None
 
 
+def _parse_arrive_geometry(geom):
+    """GeoJSON Point → (bus_lat, bus_lon). coordinates are [lon, lat]. Missing/bad → (None, None)."""
+    if not isinstance(geom, dict):
+        return None, None
+    coords = geom.get("coordinates")
+    if not isinstance(coords, (list, tuple)) or len(coords) < 2:
+        return None, None
+    try:
+        lon = float(coords[0])
+        lat = float(coords[1])
+    except (TypeError, ValueError):
+        return None, None
+    if lon != lon or lat != lat:  # NaN
+        return None, None
+    return lat, lon
+
+
 def _map_dir(destination, name_a, name_b):
     d = _norm_name(destination)
     if not d:
@@ -482,12 +499,14 @@ def _expand_arrives(payload, resource_key, ingested_at, cat_by_grain, grains_by_
                         break
             if direction_id is None:
                 map_ok = False
+            bus_lat, bus_lon = _parse_arrive_geometry(arr.get("geometry"))
             candidates.append({
                 "emt_record": "silver_arrives",
                 "_rk": _sha_rk(sid, line_id, direction_id, bus_id, dt_poll),
                 "stop_id": sid, "line_id": str(line_id), "line_label": line_label,
                 "direction_id": direction_id, "bus_id": bus_id, "destination": destination,
                 "eta_seconds": eta,
+                "bus_lat": bus_lat, "bus_lon": bus_lon,
                 "datetime_polling": dt_poll.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "ingested_at": ingested_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "stop_name": denorm["stop_name"] if denorm else None,
@@ -509,6 +528,7 @@ def _expand_arrives(payload, resource_key, ingested_at, cat_by_grain, grains_by_
                 "_rk": _sha_rk(s, l, d, None, dt_poll),
                 "stop_id": s, "line_id": l, "line_label": row["line_label"], "direction_id": d,
                 "bus_id": None, "destination": None, "eta_seconds": None,
+                "bus_lat": None, "bus_lon": None,
                 "datetime_polling": dt_poll.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "ingested_at": ingested_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "stop_name": row["stop_name"], "stop_lat": float(row["stop_lat"]) if row.get("stop_lat") is not None else None,
@@ -542,11 +562,16 @@ def _gold_eta_from_facts(facts, stale_after_sec):
             "emt_record": "gold_arrives_patch",
             "stop_id": sid, "line_id": lid, "direction_id": did,
             "line_label": head.get("line_label"), "stop_name": head.get("stop_name"),
+            "stop_lat": head.get("stop_lat"), "stop_lon": head.get("stop_lon"),
             "direction_text": head.get("direction_text"), "name_a": head.get("name_a"), "name_b": head.get("name_b"),
             "destination": (buses[0].get("destination") if buses else head.get("destination")),
             "eta_seconds_1": eta1, "bus_id_1": buses[0].get("bus_id") if buses else None,
+            "bus_lat_1": buses[0].get("bus_lat") if buses else None,
+            "bus_lon_1": buses[0].get("bus_lon") if buses else None,
             "eta_seconds_2": int(buses[1]["eta_seconds"]) if len(buses) > 1 else None,
             "bus_id_2": buses[1].get("bus_id") if len(buses) > 1 else None,
+            "bus_lat_2": buses[1].get("bus_lat") if len(buses) > 1 else None,
+            "bus_lon_2": buses[1].get("bus_lon") if len(buses) > 1 else None,
             "has_upcoming_bus": eta1 is not None,
             "is_stale": (now - max_ts).total_seconds() > int(stale_after_sec),
             "origin_stop_notice": bool(head.get("is_terminus")) and eta1 is None,

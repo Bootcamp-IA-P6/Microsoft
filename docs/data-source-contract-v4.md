@@ -1,11 +1,19 @@
 # Contrato de Origen de Datos: Proyecto EMT Madrid
-**Versión:** 4.3.1
-**Fecha:** 2026-07-23
-**Estado:** Alineado con esquema medallion (Bronze 1 · Silver por dominio · Gold 1) — [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) enmendado, [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md)
+**Versión:** 4.4
+**Fecha:** 2026-07-28
+**Estado:** Alineado con esquema medallion (Bronze 1 · Silver por dominio · Gold 1) — [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) enmendado, [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), coords de mapa [ADR-039](adr/ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md). Serving hot path: Eventhouse ([phase4-rti.md](./phase4-rti.md)).
 
 ---
 
 ## 0. Qué cambió respecto a la revisión anterior
+
+### 4.3.1 → 4.4 (2026-07-28)
+
+| # | Antes (4.3.1) | Ahora (4.4) |
+|---|---|---|
+| 1 | Gold sin coordenadas; mapa frontend dependía de mocks estáticos | Gold expone `stop_lat`/`stop_lon` (GTFS denorm desde Silver) y `bus_lat_1/2`·`bus_lon_1/2` (Arrive `geometry` → slots ETA 1/2) — [ADR-039](adr/ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md) (PO: Jonathan Brasales) |
+| 2 | `silver_arrives` sin posición de vehículo | `silver_arrives` añade `bus_lat`/`bus_lon` por fila de poll con bus (GeoJSON Point `[lon,lat]`) |
+| 3 | — | Grain / PK / ownership arrives·alerts **sin cambio**. Implementación primaria: Eventhouse (`rti/`); parity Lakehouse opcional |
 
 ### 4.3 → 4.3.1 (2026-07-23)
 
@@ -95,8 +103,10 @@ US-05 (chat) y US-06 quedan fuera del dominio Fabric de este contrato.
 | Concepto | Primary | Fallback | No usado |
 |----------|---------|----------|----------|
 | Maestro de paradas | **S3** GTFS `stops` | Nombre/dirección S1 | S2 Catalog JSON |
+| Coords de parada (mapa) | **S3** GTFS → denorm Silver → Gold `stop_lat`/`stop_lon` | StopInfo.geometry (no SoT) | Inventar / mock como SoT |
 | ID de línea | S1 `line` = S3 `route_id` | — | S2 Catalog JSON |
 | ETA | **S1** `arrives` | Ninguno | S3, S2 |
+| Coords de bus en vivo | **S1** Arrive `geometry` → Silver `bus_lat`/`bus_lon` → Gold slots `_1`/`_2` | Ninguno | GTFS, TripUpdates |
 | Paso · seed | **S1** line stops | Atributos GTFS (nombre·coords) | S2 |
 | Incidencias | **S2** proto → `silver_alerts` | Ninguno | S1 Incident, S2 Catalog JSON |
 | Frecuencia | **Observación** `silver_arrives` | Ninguno | GTFS freq, EMT Frequency* |
@@ -174,6 +184,8 @@ erDiagram
     string bus_id
     string destination
     int eta_seconds
+    double bus_lat
+    double bus_lon
     timestamp datetime_polling
     timestamp ingested_at
     string stop_name
@@ -209,14 +221,20 @@ erDiagram
     int direction_id PK
     string line_label
     string stop_name
+    double stop_lat
+    double stop_lon
     string direction_text
     string name_a
     string name_b
     string destination
     int eta_seconds_1
     string bus_id_1
+    double bus_lat_1
+    double bus_lon_1
     int eta_seconds_2
     string bus_id_2
+    double bus_lat_2
+    double bus_lon_2
     boolean has_upcoming_bus
     boolean is_stale
     boolean origin_stop_notice
@@ -315,6 +333,7 @@ _rk = SHA256(
 | `bus_id` | string | Arrive `bus` | NULL = sin bus |
 | `destination` | string | Arrive | NULL si no hay bus |
 | `eta_seconds` | int | Arrive `estimateArrive` | NULL si no hay bus |
+| `bus_lat` / `bus_lon` | double | Arrive `geometry` GeoJSON Point · `coordinates` = **`[lon, lat]`** | NULL si sin bus / geometry ausente o inválida |
 | `datetime_polling` | timestamp | Momento del poll | NOT NULL |
 | `ingested_at` | timestamp | Bronze | NOT NULL |
 | `stop_name` / `stop_lat` / `stop_lon` | — | GTFS denorm | |
@@ -341,8 +360,9 @@ _rk = SHA256(
 1. **Seed:** insertar `(stop_id, line_id, direction_id)` in-scope. Conjunto de paso = alineado con **S1 line stops SoT**. path `1` → `direction_id=0`, path `2` → `direction_id=1` (**obligatorio**). Nombre·coords pueden denormalizarse desde GTFS ([ADR-009](adr/ADR-009-served-stop-sot-is-s1-line-stops-path-not-gtfs-alone.md)).
 2. **Sin paso:** no hay combinación → no hay fila Gold.
 3. **Poll without bus:** cargar fila con `bus_id` NULL.
-4. **Poll with bus:** 1 fila por vehículo (`bus_id` en `_rk`). En la práctica, máx. **2 buses** por mismo stop×label. Arrive no trae direction → **`destination` ≈ `name_b` → `direction_id=0`**, **`≈ name_a` → `1`**. Si falla el match, prohibido actualizar a ciegas ambas direcciones en Gold ([ADR-026](adr/ADR-026-map-arrive-destination-to-direction-id-require-path-mapping-.md)).
+4. **Poll with bus:** 1 fila por vehículo (`bus_id` en `_rk`). En la práctica, máx. **2 buses** por mismo stop×label. Arrive no trae direction → **`destination` ≈ `name_b` → `direction_id=0`**, **`≈ name_a` → `1`**. Si falla el match, prohibido actualizar a ciegas ambas direcciones en Gold ([ADR-026](adr/ADR-026-map-arrive-destination-to-direction-id-require-path-mapping-.md)). Extraer `bus_lat`/`bus_lon` de `geometry`; no invertir lon/lat.
 5. **Fallo de resolve de label:** `map_ok=false` — excluido del MERGE a Gold ([ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md)).
+6. **`deviation` / `positionTypeBus` / `isHead`:** siguen **unused** ([ADR-003](adr/ADR-003-arrive-field-policy-unused-no-apply-fields-and-undefined-dev.md)); solo se usa `geometry` para coords de bus.
 
 **Deduplicación:** append-only, `_rk` idempotente.
 
@@ -385,7 +405,7 @@ _rk = SHA256(alert_id | line_id | snapshot_at)
 
 ## 8. Capa Gold: `gold_emt_stop_line`
 
-([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-022](adr/ADR-022-gold-eta-exposes-two-slots-under-one-table-constraint.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-028](adr/ADR-028-freshness-is-stale-after-180-seconds-no-gold-in-scope-column.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md))
+([ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md), [ADR-022](adr/ADR-022-gold-eta-exposes-two-slots-under-one-table-constraint.md), [ADR-027](adr/ADR-027-alerts-denormalized-onto-gold-rows-at-line-grain-under-one-t.md), [ADR-028](adr/ADR-028-freshness-is-stale-after-180-seconds-no-gold-in-scope-column.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-039](adr/ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md))
 
 **Propósito:** serving US-01/02/03/07/08. Tabla de dominio que lee el Data Agent.
 
@@ -399,13 +419,16 @@ Una fila por combinación in-scope·paso S1 alineado, con o sin bus. Sin filas d
 | `direction_id` | int | `0`\|`1` | NOT NULL · **PK** |
 | `line_label` | string | — | NOT NULL |
 | `stop_name` | string | — | NOT NULL |
+| `stop_lat` / `stop_lon` | double | Silver / GTFS denorm | NULL raro (catálogo sin coords) |
 | `direction_text` | string | — | NULL permitido |
 | `name_a` / `name_b` | string | — | NULL permitido |
 | `destination` | string | Último poll (1.º bus) | NULL si no hay bus |
 | `eta_seconds_1` | int | **ETA mínimo** del último poll del mismo grain | NULL si no hay |
 | `bus_id_1` | string | Vehículo de `eta_seconds_1` | NULL si no hay |
+| `bus_lat_1` / `bus_lon_1` | double | `geometry` del bus de `eta_seconds_1` | NULL si no hay bus / geometry inválida |
 | `eta_seconds_2` | int | Segundo ETA más rápido | NULL si solo hay 1 |
 | `bus_id_2` | string | Vehículo de `eta_seconds_2` | NULL si no hay |
+| `bus_lat_2` / `bus_lon_2` | double | `geometry` del bus de `eta_seconds_2` | NULL si no hay 2.º bus / geometry inválida |
 | `has_upcoming_bus` | boolean | `eta_seconds_1 IS NOT NULL` | NOT NULL |
 | `is_stale` | boolean | `(now - updated_at) > 180s` | NOT NULL |
 | `origin_stop_notice` | boolean | `is_terminus AND eta_seconds_1 IS NULL` | NOT NULL |
@@ -429,9 +452,12 @@ Una fila por combinación in-scope·paso S1 alineado, con o sin bus. Sin filas d
 
 **Deduplicación:** MERGE on PK.
 
+**Contrato mapa (coords):** `stop_lat`/`stop_lon` sirven la parada; `bus_lat_*`/`bus_lon_*` van **asociados** a `bus_id_1/2` del mismo slot ETA. Orden API: lon, lat. Hot path Eventhouse: ver [phase4-rti.md](./phase4-rti.md).
+
 **Tratamiento de NULL**
 
-- Sin bus → `eta_*` / `bus_id_*` NULL, `has_upcoming_bus=false`.
+- Sin bus → `eta_*` / `bus_id_*` / `bus_lat_*` / `bus_lon_*` NULL, `has_upcoming_bus=false`.
+- Bus con ETA pero sin `geometry` usable → `bus_id_*`/`eta_*` OK; `bus_lat_*`/`bus_lon_*` NULL.
 - `alert_active=false` → textos alert NULL.
 - freq NULL → historial insuficiente.
 - Sin paso → no hay fila.
@@ -457,6 +483,8 @@ Orientación no vinculante para quien monte el Semantic sobre Gold:
 | Alerta activa | `alert_active` |
 | Descripción alerta | `alert_header` (solo si activa) |
 | Frecuencia laborable / fin de semana | `freq_observed_weekday_min` / `freq_observed_weekend_min` (NULL → "no tengo ese dato todavía") |
+| Parada en mapa | `stop_lat` / `stop_lon` |
+| Buses en mapa (1.º / 2.º) | `bus_lat_1`/`bus_lon_1`, `bus_lat_2`/`bus_lon_2` |
 
 **KPIs** — placeholder; no se inventan umbrales aquí. Candidatos con stakeholder: % respondidas sin "no lo sé", precisión vs app oficial, latencia, uptime del poll, cobertura in-scope fresca.
 

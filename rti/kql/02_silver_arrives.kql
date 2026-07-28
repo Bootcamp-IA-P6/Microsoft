@@ -2,6 +2,7 @@
 // 02 — silver_arrives
 // Preferred: UDF emits emt_record=silver_arrives → Eventstream → this table
 // (Python expand = Lakehouse arrives_transform parity)
+// bus_lat/bus_lon: Arrive[].geometry GeoJSON Point coordinates [lon, lat]
 // =============================================================================
 
 .create-merge table silver_arrives (
@@ -14,6 +15,8 @@
     bus_id: string,
     destination: string,
     eta_seconds: int,
+    bus_lat: real,
+    bus_lon: real,
     datetime_polling: datetime,
     ingested_at: datetime,
     stop_name: string,
@@ -39,6 +42,8 @@
 '  {"column":"bus_id","path":"$.bus_id"},'
 '  {"column":"destination","path":"$.destination"},'
 '  {"column":"eta_seconds","path":"$.eta_seconds"},'
+'  {"column":"bus_lat","path":"$.bus_lat"},'
+'  {"column":"bus_lon","path":"$.bus_lon"},'
 '  {"column":"datetime_polling","path":"$.datetime_polling"},'
 '  {"column":"ingested_at","path":"$.ingested_at"},'
 '  {"column":"stop_name","path":"$.stop_name"},'

@@ -2,6 +2,9 @@
 // 04 — gold_emt_stop_line
 // Arrives ETA from silver_arrives (latest poll); alerts from silver_alerts_latest
 // Ownership: ETA path must NOT clear alert_*; alert path must NOT clear ETA
+// Map coords (serving):
+//   stop_lat/stop_lon — GTFS denorm from silver (catalogue)
+//   bus_lat_1/2, bus_lon_1/2 — Arrive geometry for eta slots 1/2
 // =============================================================================
 
 .create-merge table gold_emt_stop_line (
@@ -10,14 +13,20 @@
     direction_id: int,
     line_label: string,
     stop_name: string,
+    stop_lat: real,
+    stop_lon: real,
     direction_text: string,
     name_a: string,
     name_b: string,
     destination: string,
     eta_seconds_1: int,
     bus_id_1: string,
+    bus_lat_1: real,
+    bus_lon_1: real,
     eta_seconds_2: int,
     bus_id_2: string,
+    bus_lat_2: real,
+    bus_lon_2: real,
     has_upcoming_bus: bool,
     is_stale: bool,
     origin_stop_notice: bool,
@@ -36,7 +45,7 @@
     alert_url: string
 )
 
-// --- Arrives gold stage (ETA only) — run on schedule / after silver ingest ---
+// --- Arrives gold stage (ETA + map coords) — run on schedule / after silver ingest ---
 // Stale: 900s matches Lakehouse notebook default (contract ADR-028 = 180; align at cutover)
 .create-or-alter function with (folder = "emt") gold_arrives_stage(stale_after_sec: long = 900) {
     let latest_poll =
@@ -54,12 +63,12 @@
         | serialize
         | sort by stop_id asc, line_id asc, direction_id asc, eta_seconds asc
         | extend rn = row_number(1, prev(stop_id) != stop_id or prev(line_id) != line_id or prev(direction_id) != direction_id);
-    let eta1 = ranked | where rn == 1 | project stop_id, line_id, direction_id, eta_seconds_1=eta_seconds, bus_id_1=bus_id, destination;
-    let eta2 = ranked | where rn == 2 | project stop_id, line_id, direction_id, eta_seconds_2=eta_seconds, bus_id_2=bus_id;
+    let eta1 = ranked | where rn == 1 | project stop_id, line_id, direction_id, eta_seconds_1=eta_seconds, bus_id_1=bus_id, bus_lat_1=bus_lat, bus_lon_1=bus_lon, destination;
+    let eta2 = ranked | where rn == 2 | project stop_id, line_id, direction_id, eta_seconds_2=eta_seconds, bus_id_2=bus_id, bus_lat_2=bus_lat, bus_lon_2=bus_lon;
     facts
     | summarize
-        take_any(line_label), take_any(stop_name), take_any(direction_text),
-        take_any(name_a), take_any(name_b), take_any(is_terminus),
+        take_any(line_label), take_any(stop_name), take_any(stop_lat), take_any(stop_lon),
+        take_any(direction_text), take_any(name_a), take_any(name_b), take_any(is_terminus),
         take_any(catalog_loaded_at), take_any(day_type),
         updated_at = max(datetime_polling)
         by stop_id, line_id, direction_id
@@ -107,8 +116,10 @@
         freq_sample_size_weekday = int(null),
         freq_sample_size_weekend = int(null)
     | project
-        stop_id, line_id, direction_id, line_label, stop_name, direction_text, name_a, name_b,
-        destination, eta_seconds_1, bus_id_1, eta_seconds_2, bus_id_2,
+        stop_id, line_id, direction_id, line_label, stop_name, stop_lat, stop_lon,
+        direction_text, name_a, name_b,
+        destination, eta_seconds_1, bus_id_1, bus_lat_1, bus_lon_1,
+        eta_seconds_2, bus_id_2, bus_lat_2, bus_lon_2,
         has_upcoming_bus, is_stale, origin_stop_notice, is_terminus,
         catalog_loaded_at, day_type, updated_at,
         freq_observed_weekday_min, freq_observed_weekend_min,

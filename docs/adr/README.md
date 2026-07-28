@@ -42,5 +42,6 @@ Decisions from the EMT Madrid Fabric medallion schema conversation (2026-07-20).
 | [ADR-036](ADR-036-no-peak-or-off-peak-labels-no-daily-total-vehicle-counts-in-.md) | No peak or off-peak labels; no daily total vehicle counts in scope | Accepted |
 | [ADR-037](ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md) | Silver split into silver_arrives and silver_alerts | Accepted |
 | [ADR-038](ADR-038-observed-headway-passages-are-bus-visit-first-seen-at-stop.md) | Observed headway observations are bus-visit first-seen at stop×line×direction | Accepted |
+| [ADR-039](ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md) | Gold exposes stop and live bus coordinates for map serving | Accepted |
 
-Author on all records: **Mirae Kang**.
+Author on all records: **Mirae Kang** (ADR-039 decision owner: **Jonathan Brasales**).

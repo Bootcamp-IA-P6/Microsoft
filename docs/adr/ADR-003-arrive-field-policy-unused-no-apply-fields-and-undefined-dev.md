@@ -29,4 +29,4 @@ Document classification in §5 as closed observation / unused / meaning-unknown 
 
 ## 5. Amended / Superseded by
 
-- None at time of writing.
+- Amended by [ADR-039](ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md): Arrive **`geometry`** (GeoJSON Point) is **in use** for live bus lat/lon. Unused list above (`positionTypeBus`, `isHead`, `deviation`) **unchanged**.
