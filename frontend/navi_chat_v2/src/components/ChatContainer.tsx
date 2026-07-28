@@ -186,9 +186,34 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
   const hasMessages = messages.length > 0 || isLoading;
 
   const quickActions = [
-    { label: t(language, 'quickNextBus'), prompt: t(language, 'quickNextBusPrompt') },
-    { label: t(language, 'quickHowReach'), prompt: t(language, 'quickHowReachPrompt') },
-    { label: t(language, 'quickDelays'), prompt: t(language, 'quickDelaysPrompt') },
+    { labelKey: 'quickC1Bus', promptKey: 'quickC1BusPrompt' },
+    { labelKey: 'quickCibeles', promptKey: 'quickCibelesPrompt' },
+    { labelKey: 'quickLine27', promptKey: 'quickLine27Prompt' },
+    { labelKey: 'quickM1Freq', promptKey: 'quickM1FreqPrompt' },
+  ] as const;
+
+  const quickActionIcons = [
+    <svg key="bus" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="7" width="18" height="12" rx="2" />
+      <line x1="3" y1="11" x2="21" y2="11" />
+      <line x1="7" y1="4" x2="7" y2="7" />
+      <line x1="17" y1="4" x2="17" y2="7" />
+      <circle cx="8" cy="18" r="1.5" />
+      <circle cx="16" cy="18" r="1.5" />
+    </svg>,
+    <svg key="pin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a8 8 0 0 0-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>,
+    <svg key="alert" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3L2 21h20L12 3z" />
+      <line x1="12" y1="9" x2="12" y2="14" />
+      <circle cx="12" cy="17.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>,
+    <svg key="clock" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>,
   ];
 
   // ============================================================
@@ -212,7 +237,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
             <div className="empty-state__quick-actions">
               {quickActions.map((action, i) => (
                 <button
-                  key={action.prompt}
+                  key={action.promptKey}
                   type="button"
                   onClick={() => {
                     onQuickAction?.(QUICK_ACTION_TARGETS[i]);
@@ -220,12 +245,13 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
                       setHasSentFirst(true);
                       onFirstMessage?.();
                     }
-                    handleSend(action.prompt);
+                    handleSend(t(language, action.promptKey));
                   }}
                   disabled={isLoading}
                   className="action-chip"
                 >
-                  {action.label}
+                  {quickActionIcons[i]}
+                  <span>{t(language, action.labelKey)}</span>
                 </button>
               ))}
             </div>
@@ -321,7 +347,8 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
 }
 
 const QUICK_ACTION_TARGETS: FlyTarget[] = [
-  { lng: -3.7008, lat: 40.4088, zoom: 15 },
-  { lng: -3.6892, lat: 40.4669, zoom: 15 },
-  { lng: -3.7038, lat: 40.4168, zoom: 13 },
+  { lng: -3.7008, lat: 40.4168, zoom: 16 },
+  { lng: -3.6932, lat: 40.4195, zoom: 16 },
+  { lng: -3.7038, lat: 40.4168, zoom: 14 },
+  { lng: -3.7038, lat: 40.4168, zoom: 14 },
 ];
