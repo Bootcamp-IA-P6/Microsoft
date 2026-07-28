@@ -9,7 +9,7 @@ export interface BusInfo {
   raw: string;
 }
 
-const LINE_RE = /líneas?\s*(\d+)/i;
+const LINE_RE = /líneas?\s*([A-Za-z]?\d+[A-Za-z]?)/i;
 const STOP_ID_RE = /parada\s+(\d{3,5})/i;
 const STOP_NAME_RE = /(?:parada|estación)\s+(?:de\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñ]*(?:\s*[-–—]\s*[A-ZÁÉÍÓÚÑ][a-záéíóúñ]*)*)/i;
 const FIRST_BUS_RE = /(?:en|tarda)\s*(\d+)\s*(?:minutos?|min)/i;

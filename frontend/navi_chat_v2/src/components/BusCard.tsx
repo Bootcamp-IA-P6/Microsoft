@@ -1,4 +1,5 @@
 import type { BusInfo } from '@/utils/parseBusInfo';
+import { getLineColor } from '@/utils/lineColors';
 
 export function hasIncident(raw: string): boolean {
   const match = raw.match(/incidencias?|desv[ií]os|corte|aver[ií]a/i);
@@ -23,13 +24,14 @@ interface BusCardProps {
 
 export default function BusCard({ info, onFlyTo }: BusCardProps) {
   const hasIncidentFlag = hasIncident(info.raw);
+  const lineColor = getLineColor(info.line || '');
 
   return (
     <div className="bus-row-card">
       <div className="bus-row-card__header">
         <span
           className="status-badge"
-          style={{ background: 'var(--color-accent)', color: 'var(--color-accent-on)', fontWeight: 700 }}
+          style={{ background: lineColor.bg, color: lineColor.fg, fontWeight: 700 }}
         >
           {info.line || '5'}
         </span>
