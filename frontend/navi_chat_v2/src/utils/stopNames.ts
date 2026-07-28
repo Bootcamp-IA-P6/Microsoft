@@ -1,10 +1,16 @@
-export const stopIdToName: Record<string, string> = {
-  '5907': 'Sevilla',
-};
+// src/utils/stopNames.ts
+import { goldStops } from './stopsFromGold';
 
+export const stopIdToName: Record<string, string> = {};
 export const stopNameToId: Record<string, string> = {};
-for (const [id, name] of Object.entries(stopIdToName)) {
-  stopNameToId[name.toUpperCase()] = id;
+
+for (const s of goldStops) {
+  stopIdToName[s.stop_id] = s.stop_name;
+  // Para nombre → id, guardamos solo la primera ocurrencia (evita sobreescribir)
+  const key = s.stop_name.toUpperCase();
+  if (!stopNameToId[key]) {
+    stopNameToId[key] = s.stop_id;
+  }
 }
 
 export function getStopNameById(id: string): string | undefined {

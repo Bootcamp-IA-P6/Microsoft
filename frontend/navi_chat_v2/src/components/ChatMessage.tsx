@@ -69,7 +69,7 @@ export default function ChatMessage({ messageId, role, text, matchedStops, times
                   type="button"
                   onClick={() => {
                     window.dispatchEvent(
-                      new CustomEvent('map:flyTo', { detail: { lng: coords[0], lat: coords[1], zoom: 16 } })
+                      new CustomEvent('map:flyTo', { detail: { lng: coords[0], lat: coords[1], zoom: 16, stopName: stop } })
                     );
                     window.dispatchEvent(
                       new CustomEvent('nav:changeView', { detail: { view: 'split' } })

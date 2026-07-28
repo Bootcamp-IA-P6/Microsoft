@@ -49,6 +49,8 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -151,7 +153,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
         window.dispatchEvent(new CustomEvent('map:showRoute', {
           detail: {
             stopCoordinates: resolvedMapData.stop_coordinates,
-            stopName: response.chat_message.stop_name,
+            stopName: response.chat_message.stop_name || matchedStops?.[0] || '',
             routeGeoJSON: resolvedMapData.route_geojson,
           },
         }));
@@ -182,6 +184,15 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
     const feedbackType = feedback === 'like' ? 'Like' : 'Dislike';
     sendFeedbackToFabric(messageId, feedbackType, msg.questionText ?? '', msg.text);
   }
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { question } = (e as CustomEvent).detail;
+      if (question) handleSendRef.current(question);
+    };
+    window.addEventListener('chat:ask', handler);
+    return () => window.removeEventListener('chat:ask', handler);
+  }, []);
 
   const hasMessages = messages.length > 0 || isLoading;
 
