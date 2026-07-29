@@ -94,9 +94,10 @@
 // --- Full gold rebuild: preserves ownership by composing stages ---
 // Run after arrives and/or alerts silver land (Pipeline KQL activity or timer).
 // .set-or-replace gold_emt_stop_line <|
-.create-or-alter function with (folder = "emt") gold_emt_stop_line_build(stale_after_sec: long = 900) {
+.create-or-alter function with (folder = "emt") gold_emt_stop_line_build(stale_after_sec: long = 900, freq_min: long = 20) {
     let arrives = gold_arrives_stage(stale_after_sec);
     let alerts = gold_alerts_stage();
+    let freq = freq_by_line_adr038(freq_min);
     let lines = arrives | distinct line_id;
     let alert_fill =
         lines
@@ -109,12 +110,12 @@
             alert_url = iff(coalesce(alert_active, false), alert_url, "");
     arrives
     | lookup kind=leftouter alert_fill on line_id
-    // freq_* filled by 05_freq job (left null until then)
+    | lookup kind=leftouter freq on line_id
     | extend
-        freq_observed_weekday_min = real(null),
-        freq_observed_weekend_min = real(null),
-        freq_sample_size_weekday = int(null),
-        freq_sample_size_weekend = int(null)
+        freq_observed_weekday_min = coalesce(freq_observed_weekday_min, real(null)),
+        freq_observed_weekend_min = coalesce(freq_observed_weekend_min, real(null)),
+        freq_sample_size_weekday = toint(coalesce(freq_sample_size_weekday, int(null))),
+        freq_sample_size_weekend = toint(coalesce(freq_sample_size_weekend, int(null)))
     | project
         stop_id, line_id, direction_id, line_label, stop_name, stop_lat, stop_lon,
         direction_text, name_a, name_b,
@@ -127,5 +128,5 @@
         alert_active, alert_header, alert_cause, alert_effect, alert_url
 }
 
-// Apply:
-// .set-or-replace gold_emt_stop_line <| gold_emt_stop_line_build(900)
+// Apply (freq is computed inline — no separate patch step):
+// .set-or-replace gold_emt_stop_line <| gold_emt_stop_line_build(900, 20)

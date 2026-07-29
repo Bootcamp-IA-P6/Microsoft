@@ -42,18 +42,17 @@
     let nobs =
         observations
         | summarize sample_n = count() by line_id, window;
-    med
-    | lookup kind=leftouter nobs on line_id, window
-    | extend freq = iff(sample_n < freq_min, real(null), freq)
-    | evaluate pivot(window, any(freq), any(sample_n))
+    let combined =
+        med
+        | lookup kind=leftouter nobs on line_id, window
+        | extend freq = iff(sample_n < freq_min, real(null), freq);
+    let wd = combined | where window == "weekday" | project line_id, freq_observed_weekday_min = freq, freq_sample_size_weekday = sample_n;
+    let we = combined | where window == "weekend" | project line_id, freq_observed_weekend_min = freq, freq_sample_size_weekend = sample_n;
+    wd
+    | join kind=fullouter we on line_id
+    | project line_id = coalesce(line_id, line_id1),
+        freq_observed_weekday_min, freq_sample_size_weekday,
+        freq_observed_weekend_min, freq_sample_size_weekend
 }
 
-// After gold_emt_stop_line_build, patch freq (example — adjust column names after pivot):
-// let f = freq_by_line_adr038(20);
-// .set-or-replace gold_emt_stop_line <|
-//   gold_emt_stop_line
-//   | lookup kind=leftouter f on line_id
-//   | extend freq_observed_weekday_min = coalesce(weekday_freq, freq_observed_weekday_min), ...
-//
-// NOTE: pivot column names vary; validate with `freq_by_line_adr038(20)` output then wire patch.
-// If KQL prev() partitioning is fragile, keep Lakehouse freq job writing into EH via UDF gold patch until validated.
+// Freq is now auto-integrated into gold_emt_stop_line_build() — no manual patch needed.

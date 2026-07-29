@@ -1,6 +1,8 @@
 """Bootstrap catalogue seed into silver_arrives."""
 from __future__ import annotations
 
+import time
+import shutil
 import tempfile
 import zipfile
 from datetime import date, datetime
@@ -215,6 +217,7 @@ def run_bootstrap(
                         "stop_name": attrs.get("stop_name") or st.get("name"),
                         "stop_lat": attrs.get("stop_lat"),
                         "stop_lon": attrs.get("stop_lon"),
+                        "direction_text": name_a if direction_id == 0 else name_b,
                         "name_a": name_a,
                         "name_b": name_b,
                         "is_terminus": bool(is_term),
@@ -241,7 +244,7 @@ def run_bootstrap(
                 "stop_name": meta["stop_name"],
                 "stop_lat": meta["stop_lat"],
                 "stop_lon": meta["stop_lon"],
-                "direction_text": None,
+                "direction_text": meta["direction_text"],
                 "name_a": meta["name_a"],
                 "name_b": meta["name_b"],
                 "is_terminus": meta["is_terminus"],
