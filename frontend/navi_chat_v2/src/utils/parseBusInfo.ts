@@ -23,6 +23,15 @@ const NEGATIVE_PHRASES = [
   'no se espera la llegada de un bus',
   'no hay ningún autobús próximo',
   'especificar el nombre de la parada',
+  'no puedo obtener',
+  'no he podido obtener',
+  'no he podido acceder',
+  'problema técnico',
+  'error técnico',
+  'intenta de nuevo más tarde',
+  'intenta consultarlo de nuevo',
+  'no puedo acceder a los datos',
+  'no puedo acceder a la información',
 ];
 
 export function parseBusInfo(text: string): BusInfo | null {

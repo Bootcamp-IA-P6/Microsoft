@@ -1,4 +1,5 @@
 import { getStopCoords } from '@/utils/geoData';
+import { stopById } from '@/utils/stopsFromGold';
 import { parseBusInfo, isBusRelated } from '@/utils/parseBusInfo';
 import type { MapData } from '@/services/agentService';
 import BusCard from './BusCard';
@@ -53,15 +54,28 @@ export default function ChatMessage({ messageId, role, text, matchedStops, times
             <BusCard
               info={busInfo}
               onFlyTo={() => {
-                // Prioridad: mapData coords > matchedStops coords
-                const coords = mapData?.stop_coordinates
-                  || (matchedStops && matchedStops.length > 0 ? getStopCoords(matchedStops[0]) : null);
+                // Resolver stop_id del texto para obtener coords y nombre correctos
+                const textStopId = text.match(/parada\s+(\d{3,5})/i)?.[1];
+                const resolvedStop = textStopId ? stopById[textStopId] : undefined;
+
+                // Prioridad: stopById coords > mapData coords > matchedStops coords
+                const coords = resolvedStop
+                  ? [resolvedStop.lon, resolvedStop.lat] as [number, number]
+                  : mapData?.stop_coordinates
+                    || (matchedStops && matchedStops.length > 0 ? getStopCoords(matchedStops[0]) : null);
+
+                const stopName = resolvedStop?.stop_name
+                  || agentMeta?.stop_name
+                  || busInfo.stopName
+                  || '';
+
                 if (coords) {
                   window.dispatchEvent(
                     new CustomEvent('map:showRoute', {
                       detail: {
                         stopCoordinates: coords,
-                        stopName: agentMeta?.stop_name || matchedStops?.[0] || busInfo.stopName || '',
+                        stopName,
+                        stopId: textStopId || '',
                         lineLabel: agentMeta?.line_number || busInfo.line || '',
                       },
                     })

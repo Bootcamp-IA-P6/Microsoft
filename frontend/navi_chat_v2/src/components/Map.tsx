@@ -317,7 +317,7 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
       const map = mapRef.current;
       if (!map) return;
 
-      const { stopCoordinates: stopCoords, stopName, lineLabel } = (e as CustomEvent).detail;
+      const { stopCoordinates: stopCoords, stopName, stopId, lineLabel } = (e as CustomEvent).detail;
       if (!stopCoords) return;
 
       markerRef.current?.remove();
@@ -328,9 +328,13 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
       markerRef.current = marker;
 
       popupRef.current?.remove();
+      // Usar stopId directamente si existe, evitando resolución por nombre
+      const popupContent = stopId
+        ? createStopPopupContentById(stopId, stopName || 'Parada', stopCoords)
+        : createStopPopupContent(stopName || 'Parada', stopCoords);
       const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
         .setLngLat(stopCoords)
-        .setDOMContent(createStopPopupContent(stopName || 'Parada', stopCoords))
+        .setDOMContent(popupContent)
         .addTo(map);
       popupRef.current = popup;
 
@@ -339,9 +343,12 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
         ev.stopPropagation();
         popupRef.current?.remove();
         if (!mapRef.current) return;
+        const clickPopup = stopId
+          ? createStopPopupContentById(stopId, stopName || 'Parada', stopCoords)
+          : createStopPopupContent(stopName || 'Parada', stopCoords);
         const p = new maplibregl.Popup({ offset: 25, closeButton: true })
           .setLngLat(stopCoords)
-          .setDOMContent(createStopPopupContent(stopName || 'Parada', stopCoords))
+          .setDOMContent(clickPopup)
           .addTo(mapRef.current);
         popupRef.current = p;
       });

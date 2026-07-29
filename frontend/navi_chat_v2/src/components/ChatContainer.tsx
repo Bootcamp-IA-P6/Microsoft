@@ -125,25 +125,18 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
       const matchedStops = extractAllStops(answerText, question);
 
       let resolvedMapData = mapData;
+      // Resolver stop_id para coords y para pasar al mapa
+      const sid = response.chat_message.stop_id
+        || answerText.match(/parada\s+(\d{3,5})/i)?.[1]
+        || question.match(/parada\s+(\d{3,5})/i)?.[1]
+        || '';
       if (!resolvedMapData) {
         // Prioridad: buscar por stop_id exacto (evita colisiones de nombre)
         // Fallback: buscar por stop_name (para quick-actions y preguntas sin ID)
-        const sid = response.chat_message.stop_id;
         const byId = sid ? stopById[sid] : undefined;
-        // DEBUG: diagnóstico de tipos
-        console.log('[STOP_ID_DEBUG]', {
-          sid,
-          sidType: typeof sid,
-          byIdFound: !!byId,
-          byIdValue: byId ? { lat: byId.lat, lon: byId.lon, name: byId.stop_name } : null,
-          stopByIdKeysFirst5: Object.keys(stopById).slice(0, 5),
-          stopByIdKeyTypes: Object.keys(stopById).slice(0, 5).map(k => typeof k),
-          fallbackName: response.chat_message.stop_name,
-        });
         const stopCoords = byId
           ? [byId.lon, byId.lat] as [number, number]
           : getStopCoords(response.chat_message.stop_name || '');
-        console.log('[STOP_ID_DEBUG] resolved coords:', stopCoords);
         if (stopCoords) {
           resolvedMapData = {
             type: 'bus_stop_and_route',
@@ -174,6 +167,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
           detail: {
             stopCoordinates: resolvedMapData.stop_coordinates,
             stopName: response.chat_message.stop_name || matchedStops?.[0] || '',
+            stopId: sid || '',
             lineLabel: response.chat_message.line_number || '',
           },
         }));
@@ -380,8 +374,8 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
 }
 
 const QUICK_ACTION_TARGETS: FlyTarget[] = [
-  { lng: -3.7008, lat: 40.4168, zoom: 16 },
-  { lng: -3.6932, lat: 40.4195, zoom: 16 },
-  { lng: -3.7038, lat: 40.4168, zoom: 14 },
-  { lng: -3.7038, lat: 40.4168, zoom: 14 },
+  { lng: -3.69827, lat: 40.41848, zoom: 16.5 },  // Sevilla (3698)
+  { lng: -3.69849, lat: 40.41796, zoom: 16.5 },  // Sol - Sevilla (5907)
+  { lng: -3.7003, lat: 40.4172, zoom: 15 },       // Centro zona (incidencias)
+  { lng: -3.7003, lat: 40.4172, zoom: 15 },       // Centro zona (frecuencia)
 ];
