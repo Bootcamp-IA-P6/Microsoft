@@ -126,7 +126,7 @@ The Microsoft route was implemented end to end. The alternatives column is kept 
    - *Option B (used in the meantime):* mock stop coordinates on the frontend (`src/utils/geoData.ts`) to draw an approximate line.
    **Status:** decision **closed** — Option A is being implemented. The mock remains a temporary solution until the Gold extension is available.
 
-5. **Feedback 👍/👎:** buttons present in the UI. **Decision closed:** it will be persisted in a table in the app's workspace Lakehouse (still to be implemented).
+5. **Feedback 👍/👎:** buttons present in the UI. It will be persisted in a table in the backend's workspace Lakehouse.
 
 ---
 

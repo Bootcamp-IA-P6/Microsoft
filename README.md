@@ -126,7 +126,7 @@ Se implementó la ruta Microsoft de punta a punta. La columna de alternativas qu
    - *Opción B (usada mientras tanto):* mock de coordenadas de paradas en frontend (`src/utils/geoData.ts`) para trazar una línea aproximada.
    **Estado:** decisión **cerrada** — se implementa la Opción A. El mock queda como solución temporal hasta que la extensión de Gold esté disponible.
 
-5. **Feedback 👍/👎:** botones presentes en la UI. **Decisión cerrada:** se persistirán en una tabla del Lakehouse del workspace de la app (aún por implementar).
+5. **Feedback 👍/👎:** botones presentes en la UI. Se persistirán en una tabla del Lakehouse en el workspace del backend.
 
 ---
 
