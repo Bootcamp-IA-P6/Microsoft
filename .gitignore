@@ -14,6 +14,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# Node
+node_modules/
+
 # Jupyter / notebooks
 .ipynb_checkpoints/
 
@@ -35,6 +38,12 @@ samples/
 docs/Convenciones_del_equipo_Notion.pdf
 docs/factoriaF52026_abstract.pdf
 docs/roadmap.md
+docs/data-source-contract-draft.mdnode_modules/
+docs/data-source-contract-draft.md
+node_modules/
+dist/
+.venv/
+frontend/navi-chat/
 docs/data-source-contract-draft.md
 
 frontend/navi_chat_v2/node_modules

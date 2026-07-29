@@ -1,9 +1,9 @@
-# 🚌 De dato vivo a respuesta en lenguaje natural
+# NAVI — De dato vivo a respuesta en lenguaje natural
 
 **Proyecto final · Factoría F5 × Microsoft (2026)**
-> Un vertical agéntico end-to-end que colapsa una cadena de días de trabajo (captura → modelado → consulta → dashboard) en una conversación de segundos.
+> Un agente conversacional que responde en lenguaje natural sobre datos de movilidad urbana en tiempo casi-real, construido sobre Microsoft Fabric.
 
-[![Estado](https://img.shields.io/badge/estado-en%20construcción-yellow)]()
+[![Estado](https://img.shields.io/badge/estado-cierre-brightgreen)]()
 [![Bootcamp](https://img.shields.io/badge/Factor%C3%ADa%20F5-2026-blue)]()
 [![Partner](https://img.shields.io/badge/partner-Microsoft-0078D4)]()
 
@@ -11,11 +11,9 @@
 
 ## 📌 Contexto
 
-Son las 18:00. En el aula, alguien lanza una pregunta sencilla: *"¿cuánto tarda el próximo bus en llegar a mi parada, y qué líneas tienen más retraso ahora mismo?"*
+Son las 18:00 en Madrid. Alguien espera el bus y se pregunta: *¿cuánto tarda en llegar?* El dato existe y es público, pero convertirlo en una respuesta legible exige una cadena invisible de trabajo — captura, modelado, consulta, interfaz. Días de trabajo para una pregunta de tres segundos.
 
-El dato existe y es público. Pero responder esa pregunta hoy, en una organización real, exige una cadena de especialistas: alguien que capture los datos, alguien que los modele, alguien que escriba la consulta, alguien que monte el cuadro de mando. Días de trabajo para una pregunta de diez segundos.
-
-Este proyecto cierra esa distancia construyendo un **agente de datos conversacional** capaz de responder preguntas en lenguaje natural sobre datos que están vivos, en tiempo casi-real — sin que nadie escriba una sola línea de SQL.
+**NAVI** cierra esa distancia: un agente conversacional que responde en lenguaje natural sobre datos de **EMT Madrid** en tiempo casi-real, sin una sola línea de SQL, construido íntegramente sobre **Microsoft Fabric**.
 
 Es, a la vez, el entregable y el material formativo: cada capa cose una disciplina distinta (Data Engineering, Data Science, IA Agéntica) en un único hilo reproducible.
 
@@ -26,179 +24,165 @@ Es, a la vez, el entregable y el material formativo: cada capa cose una discipli
 Construir un sistema capaz de responder preguntas como:
 
 - *"¿Cuánto tarda el próximo bus en la parada de Lavapiés?"*
-- *"¿Qué líneas tienen mayor retraso ahora mismo?"*
-- *"Avísame si algún autobús de la línea 49 tiene más de 30 min de retraso."*
-- *"Compárame las líneas de bus que pasen por Plaza Castilla."*
+- *"¿Qué autobuses llegan ahora a esta parada?"*
+- *"¿Hay incidencias activas en la línea 27?"*
+- *"¿Cada cuánto pasa la línea M1?"*
 
-conectando una fuente de datos en vivo → un agente que entiende esos datos → un orquestador que decide cuándo preguntarle.
-
----
-
-## 🗂️ Dataset
-
-**Fuente elegida: EMT Madrid Open Data (EMT Madrid Mobility Labs)**
-
-API pública de transporte urbano de Madrid: llegadas en tiempo real a paradas de bus, estado de la red, ocupación. Requiere un token gratuito de registro (paso de setup que también es aprendizaje real sobre gestión de credenciales en producción).
-
-**Por qué esta y no OpenSky (tráfico aéreo):** el dominio de movilidad urbana conecta directamente con la misión de inclusión social de Factoría F5, y las preguntas que responde el agente tienen impacto directo y cotidiano para cualquier usuario del transporte público. La arquitectura no cambia respecto a la alternativa considerada — solo cambia la fuente de datos.
+conectando una fuente de datos en vivo → un agente que entiende esos datos → una interfaz conversacional con mapa en tiempo real.
 
 ---
 
-## 🏗️ Arquitectura
+## 🗂️ Dataset y ámbito
+
+**Fuente: EMT Madrid Open Data (EMT Madrid Mobility Labs)** — API REST (llegadas en tiempo real) + GTFS-RT `servicealerts` (incidencias) + GTFS estático (maestro de paradas/líneas).
+
+**Alcance geográfico (PoC formativo, deliberadamente acotado):**
+- **Centro:** Puerta del Sol (`40.416729, -3.703339`)
+- **Radio:** geofence circular de **600 metros**
+- **Cobertura confirmada:** **52 paradas** in-scope, todas las líneas que pasan por al menos una de ellas
+- **Perfil de usuario objetivo:** turista o persona en la zona preguntando por buses cercanos
+
+No es cobertura de Madrid completa — es un recorte reproducible pensado para validar el patrón end-to-end, no para escalar el dominio del dato.
+
+---
+
+## 🏗️ Arquitectura (final, real)
 
 ```mermaid
 flowchart LR
-    U[👤 Usuario\npregunta en lenguaje natural] --> S[Supervisor\nmulti-agente]
-    S --> A[Agente especialista\ndel dominio]
-    A --> M[Servidor MCP\nestándar abierto]
-    M --> D[Agente de datos\nFabric Data Agent]
-    D --> L[(Lakehouse\nbronze → silver → gold)]
-    D --> R[respuesta estructurada]
-    R --> A
-    A --> S
-    S --> U
+    U[👤 Usuario] --> FE[Frontend React/Vite\nnavi_chat_v2 + Rayfin]
+    FE -->|MSAL/Entra ID\nlogin browser| AUTH[Microsoft Entra ID]
+    FE -->|POST + Bearer token| UDF[Fabric User Data Function]
+    UDF --> DA[Fabric Data Agent\nexpuesto como MCP tool]
+    DA --> SEM[Semantic Model\nDirect Lake]
+    SEM --> G[(gold_emt_stop_line)]
+    DA --> R[respuesta redactada\nen lenguaje natural]
+    R --> UDF --> FE
 
-    E[🚌 API EMT Madrid\ntiempo real] -->|streaming| L
+    S1[EMT OpenAPI\nREST] -->|poll ~60s| B[(bronze_emt_raw)]
+    S2[GTFS-RT\nservicealerts] -->|poll ~300s| B
+    S3[GTFS estático] -.bootstrap.-> SA[(silver_arrives)]
+    B --> SA[(silver_arrives)]
+    B --> SAL[(silver_alerts)]
+    SA --> G
+    SAL --> G
+
+    FE -.fallback local\nsolo testing.-> LB[server.py + agent_mcp.py\nAzureCliCredential]
+    LB -.-> DA
 ```
 
-**Flujo de una pregunta:**
+**Flujo de una pregunta en producción:**
 
-1. El usuario pregunta en lenguaje natural.
-2. El supervisor delega al agente especialista del dominio.
-3. El especialista invoca `ask_dataagent()` vía servidor MCP.
-4. El agente de datos traduce lenguaje natural → SQL/KQL.
-5. Se ejecuta la consulta sobre datos vivos.
-6. Vuelve una respuesta estructurada.
-7. El especialista añade contexto.
-8. El supervisor entrega la respuesta final al usuario.
+1. El usuario escribe en el chat del frontend.
+2. El frontend obtiene un token de Entra ID (MSAL, login en navegador) y llama directo al **Fabric User Data Function (UDF)**.
+3. El UDF invoca al **Fabric Data Agent** vía MCP (streamable HTTP).
+4. El Data Agent traduce la pregunta a consulta sobre el **Semantic Model (Direct Lake)**, montado sobre la tabla Gold — no lee Gold directamente.
+5. El Data Agent redacta la respuesta final en lenguaje natural (no hace falta reprocesarla del lado del frontend).
+6. La respuesta vuelve al UDF → frontend → chat + mapa.
 
-> Ejemplo real: *"¿Qué líneas tienen mayor retraso ahora mismo?"* → *"La línea 27 acumula el mayor retraso medio, 8 min sobre lo previsto"*
+**Diferencia clave respecto a la arquitectura de referencia inicial:** se descartó la capa de orquestación multi-agente propia (supervisor + agente especialista con LLM externo). El Fabric Data Agent resuelve lenguaje natural → consulta → redacción en un solo salto, expuesto como único tool MCP.
 
 ---
 
-## 🧱 Stack tecnológico
+## 🧱 Stack tecnológico (final)
 
-La arquitectura sigue el patrón **medallion** (bronze → silver → gold) y se apoya en **MCP (Model Context Protocol)** como pieza clave: al exponerse el agente de datos como servidor MCP, cada capa por encima y por debajo es intercambiable.
+La arquitectura sigue el patrón **medallion** (Bronze 1 · Silver por dominio · Gold 1) y usa **MCP (Model Context Protocol)** como pieza de interoperabilidad: el Data Agent se expone como servidor MCP, por lo que cada capa por encima es intercambiable sin tocar el resto.
 
-| Capa | Función | Stack Microsoft (recomendado) | Alternativa abierta / agnóstica |
-|---|---|---|---|
-| Ingesta en tiempo real | Captura de eventos vía endpoint HTTP | Fabric Eventstream — HTTP Source | Kafka, Redpanda (+ cron/Python, Airflow, Dagster) |
-| Almacén bronze (RT) | Persistencia rápida del raw | Fabric Eventhouse (KQL) | ClickHouse, Apache Druid, TimescaleDB |
-| Lakehouse silver/gold | Modelado medallion | Fabric Lakehouse (Delta) | Delta Lake / Iceberg sobre MinIO/S3, DuckDB |
-| Transformación | Limpieza + agregados | Notebook PySpark | dbt, Spark, Polars, DuckDB |
-| Capa semántica | Métricas + relaciones | Semantic Model Direct Lake | Cube, dbt Semantic Layer |
-| Agente de datos | Lenguaje natural → SQL/DAX/KQL | Fabric Data Agent (GA) | Vanna.ai, Wren AI, LangChain SQL Agent, LlamaIndex |
-| Protocolo de herramientas | Exponer el agente como tool | MCP — estándar abierto | MCP (igual en ambos casos) |
-| Orquestación multi-agente | Coordinar specialist + supervisor | Microsoft Agent Framework (patrón Magentic) | LangGraph, CrewAI, AutoGen, OpenAI Agents SDK, Pydantic AI |
-| Modelo LLM | Razonamiento de los agentes | Azure OpenAI / Foundry | OpenAI, Anthropic, u open-source vía Ollama |
-| Frontend demo | Chat UI end-to-end | — | Streamlit / Chainlit |
+Se implementó la ruta Microsoft de punta a punta. La columna de alternativas queda como referencia para quien quiera replicar el patrón fuera de este stack — no se construyó ni se probó en este proyecto.
 
-> ⚠️ Justificación pendiente de cerrar en el kickoff del lunes: se elige el stack según restricciones reales del equipo (skills, tiempo, licencias), no solo por el patrón "recomendado".
+| Capa | Stack Microsoft (usado en producción) | Alternativa abierta / agnóstica *(solo referencia, no implementada)* |
+|---|---|---|
+| Ingesta | Notebook PySpark en Fabric — poll `arrives` ~60s, GTFS-RT ~300s | Airflow/Dagster + cron, Kafka/Redpanda |
+| Lakehouse | Fabric Lakehouse (Delta) — `bronze_emt_raw` → `silver_arrives` + `silver_alerts` → `gold_emt_stop_line` | Delta Lake/Iceberg sobre MinIO/S3, DuckDB |
+| Capa semántica | Semantic Model Direct Lake sobre Gold — capa que consulta el Data Agent | Cube, dbt Semantic Layer |
+| Agente de datos | Fabric Data Agent (GA), expuesto como MCP tool | Vanna.ai, Wren AI, LangChain SQL Agent, LlamaIndex |
+| Protocolo de herramientas | MCP — estándar abierto | MCP (el mismo protocolo; es agnóstico por diseño) |
+| Conexión frontend↔datos | Fabric User Data Function, invocada directo desde el navegador | API Gateway / Cloud Function propia + OAuth genérico |
+| Auth | Microsoft Entra ID vía MSAL (`@azure/msal-browser`, `@azure/msal-node`) | Cualquier proveedor OIDC/OAuth2 |
+| Frontend | React 19 + Vite + TypeScript, Rayfin (auth + static hosting Fabric), MapLibre GL + deck.gl (mapa 3D) | Cualquier SPA + hosting propio, Streamlit/Chainlit para un MVP más simple |
+| Modelo LLM | Azure OpenAI (modelo más reciente disponible) — el Fabric Data Agent usa el mismo proveedor que el agente propio de Fase 3, ahora vía Azure en vez de directo a la API de OpenAI | OpenAI directo (como en Fase 3, sobre mock) |
+| Fallback / testing local | FastAPI (`server.py`) + `agent_mcp.py` con `AzureCliCredential` | — |
+
+> Guía de instalación y ejecución completa: [`docs/technical-guide.md`](docs/technical-guide.md)
+
+---
+
+## 🔀 Decisiones de cierre (Option A/B y alternativas)
+
+1. **Orquestación del agente — Fabric Data Agent vs. agente propio (Fase 3, sobre OpenAI)**
+   Fase 3 arrancó con un agente especialista propio sobre OpenAI (`agents/emt_specialist/agent.py`, sobre mock). Se descartó a favor del **Fabric Data Agent** como único tool MCP, por mandato del stakeholder de no salir del stack Microsoft/Azure/Fabric. El código de Fase 3 se conserva en el repo como referencia histórica de aprendizaje, no como parte del sistema en producción.
+
+2. **Conexión frontend↔datos — backend proxy local vs. Fabric UDF directo**
+   - *Opción A (descartada para producción):* backend FastAPI local (`server.py`) que hace de proxy hacia el Data Agent con `AzureCliCredential`.
+   - *Opción B (elegida, producción):* el frontend llama directo al **Fabric User Data Function**, autenticado con Entra ID/MSAL desde el navegador, sin backend intermedio.
+   El backend local **se mantiene en el repo como fallback de testing/desarrollo local**, no como parte del flujo de producción.
+
+3. **Silver como tabla única vs. Silver por dominio**
+   - *Opción A (referencia inicial):* una sola `silver_emt`.
+   - *Opción B (elegida, ADR-037):* split en `silver_arrives` (historial de polls, sin alertas) + `silver_alerts` (snapshot latest-only de incidencias). Gold mantiene el mismo contrato de columnas `alert_*`.
+
+4. **Coordenadas para el mapa 3D — extender Gold vs. mock**
+   - *Opción A (decidida, en implementación):* extender `gold_emt_stop_line` con `bus_lat_1/lon_1`, `bus_lat_2/lon_2` y heredar `stop_lat/lon`, para pintar paradas y buses reales sin mocks.
+   - *Opción B (usada mientras tanto):* mock de coordenadas de paradas en frontend (`src/utils/geoData.ts`) para trazar una línea aproximada.
+   **Estado:** decisión **cerrada** — se implementa la Opción A. El mock queda como solución temporal hasta que la extensión de Gold esté disponible.
+
+5. **Feedback 👍/👎:** botones presentes en la UI. Se persistirán en una tabla del Lakehouse en el workspace del backend.
 
 ---
 
 ## 📚 Conceptos clave
 
-- **Medallion architecture**: patrón de modelado de datos en tres capas — *bronze* (raw), *silver* (limpio/conformado), *gold* (agregados listos para negocio).
+- **Medallion architecture**: patrón de modelado de datos en tres capas — *bronze* (raw), *silver* (limpio/conformado, por dominio), *gold* (agregados listos para negocio).
 - **MCP (Model Context Protocol)**: estándar abierto que expone herramientas/datos a agentes de forma uniforme, independiente del proveedor de modelo.
-- **MAF (Microsoft Agent Framework)**: sucesor de Semantic Kernel + AutoGen; framework de orquestación multi-agente (patrón *Magentic*: un supervisor delega en agentes especialistas).
-- **Fabric Data Agent**: agente gestionado que traduce lenguaje natural a consultas sobre datos gobernados (SQL/DAX/KQL).
+- **Fabric Data Agent**: agente gestionado que traduce lenguaje natural a consultas sobre el Semantic Model, y redacta la respuesta final.
+- **Fabric User Data Function (UDF)**: función serverless de Fabric invocable con auth Entra ID, puente entre el frontend y el Data Agent en producción.
+
+---
+
+## ▶️ Cómo usar la aplicación
+
+**🌐 Prueba la app en producción:** https://hale-hawk-199fba3f05-francecentral.webapp.fabricapps.net/
+
+
+**🎥 Demo:**
+> _[placeholder — añadir gif/video de la demo aquí]_
+
+**💻 ¿Quieres correrla en local?** Toda la instalación, variables de entorno y el fallback sin UDF están en [`docs/technical-guide.md`](docs/technical-guide.md).
+
+---
+
+## 📁 Estructura del repo (rama `main`)
+
+```
+.
+├── agents/
+│   └── emt_specialist/       # Agente Fase 3 sobre OpenAI (mock) — histórico, no producción
+├── docs/
+│   ├── data-source-contract-v4.md   # contrato de datos vigente (v4.3)
+│   ├── technical-guide.md           # instalación y ejecución
+│   └── adr/                         # decisiones de arquitectura (ADR-001..037)
+├── frontend/
+│   ├── navi_chat_v2/          # ✅ app vigente: React + Vite + Rayfin + MSAL
+│   │   ├── src/services/      # agentService.ts (UDF), udfAuth.ts (MSAL)
+│   │   ├── server.py          # fallback local (FastAPI)
+│   │   └── agent_mcp.py       # fallback local (cliente MCP con AzureCliCredential)
+│   └── navi-chat/             # versión anterior del frontend — histórica
+├── notebooks/                 # ingesta y transformación bronze→silver→gold (Fabric)
+├── scripts/                   # utilidades de prueba contra la API EMT
+├── tests/
+└── README.md
+```
 
 ---
 
 ## 👥 Roles del equipo
 
-Equipo de 4, trabajando en parejas fijas (con sync corto diario entre parejas para que nadie llegue al cierre sin entender la otra mitad del sistema):
-
 | Rol | Persona | Responsabilidades |
 |---|---|---|
-| Product Owner | Jonathan Brasales | Elige dominio con el stakeholder, prioriza backlog, define y valida preguntas de prueba, QA continua del agente |
-| Scrum Master | Iris Fernanda Amorim | Facilita ceremonias, gestiona el backlog, accesos/credenciales, testing del pipeline, documentación de reproducibilidad |
-| Developer | Mirae Kang | Ingesta → modelado (Eventstream, medallion bronze/silver/gold, capa semántica) |
-| AI Developer | Raúl Machaca | Agente básico sobre mock → MCP → supervisor → frontend |
-
-**Parejas de trabajo:**
-- **Developer + Scrum Master** → plataforma de datos (Fase 2)
-- **AI Developer + Product Owner** → capa agéntica (Fase 3-5)
-- **Cierre A** (Developer + AI Developer) → QA end-to-end
-- **Cierre B** (PO + Scrum Master) → README, blog, diapositivas
-
-> Roles cerrados en el kickoff del 06/07.
-
----
-
-## 🔄 Metodología de trabajo
-
-- **Framework**: Scrum, sprints de **1 semana** (3 sprints) + **1 semana de cierre** dedicada a QA y material publicable, para llegar con margen a la demo del **30/07**.
-- **Tablero**: GitHub Projects, vinculado a las Issues del repo.
-- **Issues**: una issue por tarea/historia de usuario, etiquetada por capa (`ingesta`, `lakehouse`, `agente`, `mcp`, `frontend`, `docs`) y por fase (`area:z1`, `area:z2`…).
-- **Ramas**: `main` protegida · `feature/<nombre-issue>` para desarrollo · PR obligatorio con al menos 1 revisión.
-- **Daily / seguimiento**: sync de 5-10 min por **Zoom**, entre las dos parejas (Developer+SM ↔ AI Developer+PO). Cada pareja le cuenta a la otra qué hizo y qué va a hacer — el objetivo no es solo destrabar bloqueos, sino que **las 4 personas entiendan el ciclo completo del producto** (dato → agente → frontend), no solo su mitad. 3 preguntas: qué se entregó, qué se entrega hoy, qué bloquea a la otra pareja. Demo interna de 10 min al cierre de cada sprint (viernes).
-- **Definition of Done**: por issue — se define en los **criterios de aceptación** de cada issue, no como regla global.
-
-**Calendario de sprints:**
-
-| Sprint | Fechas | Foco |
-|---|---|---|
-| Sprint 1 | 6–10 jul | Z1 Setup + arranque Z2/Z3 en paralelo |
-| Sprint 2 | 13–17 jul | Z2 (ingesta→gold) + Z3 (agente sobre mock→MCP) |
-| Sprint 3 | 20–24 jul | Z4 (supervisor + frontend) + extensiones si sobra tiempo |
-| Cierre | 27–30 jul | Cierre A (QA) + Cierre B (README/blog/slides) |
-| **Demo** | **30/07** | 🎤 |
-
----
-
-## 🗺️ Roadmap por fases
-
-Modelo de trabajo: **Z1** todo el equipo junto · **Z2 y Z3 en paralelo por parejas** · **Z4** dividido en dos frentes de cierre.
-
-| Fase | Qué se entrega | Quién | Depende de |
-|---|---|---|---|
-| 0. Setup (Z1) | Tenant + capacidad decidida (trial o F2), workspace | Todos (2 días máx) | — |
-| 1. Fuente de datos | Dominio elegido → **EMT Madrid** ✅ | PO, con el stakeholder | Reunión inicial |
-| 2. Ingesta → modelado (Z2) | Datos vivos consultables en tablas gold | Developer + Scrum Master | Fase 0 |
-| 3. Agente básico (Z3, sobre mock) | Agente construido y probado sobre datos simulados | AI Developer + PO | Fase 1 (no espera a Fase 2) |
-| 4-5. MCP + supervisor + frontend (Z3) | Chat end-to-end + mapa en vivo + feedback 👍/👎 | AI Developer + PO | Fase 3 + tabla gold real de Fase 2 |
-| 6. Extensión | Segundo dominio, alertas, voz, ranking, anomalías | Según capa | Fase 5 estable |
-| Cierre A — QA completo | Validación end-to-end, fixes | Developer + AI Developer | Fase 5 |
-| Cierre B — README, blog, diapositivas | Material publicable y de portfolio | PO + Scrum Master | Fase 5 |
-
-> ⚠️ Único punto de sincronización real: el AI Developer no puede validar con datos reales hasta que el Developer entregue la tabla gold — por eso Z3 arranca sobre mock desde el día 1, no espera a Z2.
-
-**Setup (Z1) — checklist:**
-- [ ] Crear/verificar tenant Microsoft 365.
-- [ ] Intentar activar trial de 60 días en Fabric (o crear capacidad F2 de pago por uso si el tenant tiene menos de 90 días).
-- [ ] Documentar la decisión (trial vs. F2) y coste estimado.
-- [ ] Crear Workspace del proyecto y asignar capacidad; añadir a los 4 miembros.
-- [ ] Si es F2, configurar pausa automática fuera de horario.
-- [ ] Documentar el setup completo (reproducibilidad).
-
-**Ideas de extensión (Fase 6, priorizadas por dependencia, no se activan hasta Fase 5 estable):**
-
-| Idea | Capa | Prerrequisito |
-|---|---|---|
-| Alertas proactivas (ej. "avísame si la línea 49 tiene +30 min de retraso") | Z2 (regla) + Z3 (canal salida) | Stream estable en producción |
-| Mapa en vivo interactivo | Frontend, sobre capa semántica (lat/lon) | Capa semántica lista |
-| Modo voz (Azure AI Speech) | Z3/Z4 | Flujo texto→respuesta ya sólido |
-| Ranking con gráfico (comparar líneas) | Z4, sobre capa semántica | Agente detecta intención de "comparar" |
-| Detección de anomalías (picos de retraso) | Z2 (job sobre gold) + Z3 (mensaje chat) | Varios días de histórico acumulado |
-| Feedback 👍/👎 | Tabla en Lakehouse + botones Streamlit | — |
-
----
-
-## 📁 Estructura del repo *(propuesta inicial)*
-
-```
-.
-├── data-ingestion/       # captura de eventos, conectores API
-├── lakehouse/            # notebooks/scripts medallion (bronze/silver/gold)
-├── semantic-layer/       # definición de métricas de negocio
-├── data-agent/           # configuración del agente de datos + servidor MCP
-├── agents/               # agente especialista y supervisor multi-agente
-├── frontend/             # chat UI (Streamlit / Chainlit)
-├── docs/                 # arquitectura detallada, decisiones, actas de reunión
-└── README.md
-```
+| Product Owner / AI Developer / Backend | Jonathan Brasales | Backlog, validación con stakeholder, desarrollo del agente (Fabric Data Agent + MCP) y del backend (UDF, fallback local) |
+| Scrum Master / Frontend Developer | Iris Fernanda Amorim | Facilita ceremonias, gestiona el backlog y accesos/credenciales, y desarrollo de frontend |
+| Data Engineer | Mirae Kang | Ingesta → modelado medallion (bronze/silver/gold) |
+| Analytics Developer | Raúl Machaca | Capa semántica (Semantic Model Direct Lake) + dashboard de rendimiento de la app |
 
 ---
 
@@ -206,11 +190,8 @@ Modelo de trabajo: **Z1** todo el equipo junto · **Z2 y Z3 en paralelo por pare
 
 - Microsoft Agent Framework: https://learn.microsoft.com/agent-framework/overview/
 - Fabric Data Agent (GA): https://learn.microsoft.com/fabric/data-science/concept-data-agent
-- Fabric Eventstream — HTTP Source: https://learn.microsoft.com/fabric/real-time-intelligence/event-streams/add-source-http
+- Fabric User Data Functions: https://learn.microsoft.com/fabric/data-engineering/user-data-functions/
 - Model Context Protocol (MCP): https://modelcontextprotocol.io
 - Direct Lake (Fabric): https://learn.microsoft.com/fabric/fundamentals/direct-lake-overview
-- EMT Madrid Open Data (portal / registro de token): *(añadir enlace exacto tras el registro)*
+- Contrato de datos vigente: [`docs/data-source-contract-v4.md`](docs/data-source-contract-v4.md)
 
----
-
-*Documento vivo — se actualizará tras el kickoff del lunes con las decisiones de stack, Developer/AI Developer y calendario.*
