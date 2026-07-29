@@ -178,7 +178,8 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
           },
         }));
       }
-    } catch {
+    } catch (err) {
+      console.error('[askAgent error]', err);
       const errorMsg: Message = {
         id: crypto.randomUUID(),
         role: 'agent',
