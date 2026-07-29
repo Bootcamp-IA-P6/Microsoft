@@ -4,11 +4,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Lang } from '@/i18n/translations';
 import MapLibreInlineWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&inline';
 import { getStopIdByName } from '@/utils/stopNames';
-import { stopCoordinates } from '@/utils/geoData';
 import { getRouteShape } from '@/utils/routeShapes';
 import { getLineColor } from '@/utils/lineColors';
 import { getLinesForStop } from '@/utils/stopLines';
-import { goldStops, stopById } from '@/utils/stopsFromGold';
+import { goldStops } from '@/utils/stopsFromGold';
 
 const __OriginalWorker = globalThis.Worker;
 const __PatchedWorker = function (this: Worker, url: string | URL, options?: WorkerOptions): Worker {
@@ -98,11 +97,6 @@ function createStopPopupContentById(stopId: string, stopName: string, _stopCoord
   container.appendChild(btn);
 
   return container;
-}
-
-function findStopByCoords(coords: [number, number]) {
-  // Buscar la parada exacta por coordenadas (lon, lat)
-  return goldStops.find(s => s.lon === coords[0] && s.lat === coords[1]) || null;
 }
 
 export default function Map({ className = '', flyTarget, isMapVisible }: MapProps) {
