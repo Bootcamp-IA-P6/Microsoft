@@ -1,0 +1,10 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Navi - icono de marca</title>
+<desc>Icono circular azul marino con anillo blanco y una brujula bicolor ambar/blanca en el centro, simbolo de navegacion y asistencia conversacional.</desc>
+<circle cx="100" cy="100" r="94" fill="#14213D"/>
+<circle cx="100" cy="100" r="94" fill="none" stroke="#FFFFFF" stroke-width="6"/>
+<path d="M100 58 L138 100 L100 100 L62 100 Z" fill="#FFB100"/>
+<path d="M100 100 L138 100 L100 142 L62 100 Z" fill="#FFFFFF" stroke="#14213D" stroke-width="2"/>
+<circle cx="100" cy="100" r="7" fill="#14213D"/>
+<circle cx="100" cy="100" r="7" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+</svg>

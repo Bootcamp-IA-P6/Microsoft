@@ -1,0 +1,43 @@
+{
+  "runtime": "TypeScript",
+  "functionsMetadata": [
+    {
+      "name": "chat",
+      "scriptFile": "src\\function_app.ts",
+      "bindings": [
+        {
+          "name": "req",
+          "type": "httpTrigger",
+          "direction": "in",
+          "authLevel": "anonymous",
+          "methods": [
+            "post"
+          ],
+          "route": "chat"
+        },
+        {
+          "name": "$return",
+          "type": "http",
+          "direction": "out"
+        }
+      ],
+      "fabricProperties": {
+        "fabricMetadataSchemaVersion": "1.0",
+        "fabricFunctionReturnType": "Promise<{ answerText: string }>",
+        "fabricFunctionParameters": [
+          {
+            "name": "question",
+            "dataType": "string",
+            "hasDefaultValue": false
+          },
+          {
+            "name": "language",
+            "dataType": "string",
+            "hasDefaultValue": false
+          }
+        ]
+      },
+      "functionCode": "udf.func(\n  'chat',\n  async (question: string, language: string): Promise<{ answerText: string }> => {\n    if (isLocalDev()) {\n      return mockAnswer(question, language);\n    }\n\n    try {\n      const credential = new DefaultAzureCredential();\n      const token = await credential.getToken('https://api.fabric.microsoft.com/.default');\n      const answerText = await callDataAgent(question, token.token);\n      return { answerText };\n    } catch (err) {\n      console.error('Data agent call failed:', err);\n      return mockAnswer(question, language);\n    }\n  },\n  [],\n)"
+    }
+  ]
+}
