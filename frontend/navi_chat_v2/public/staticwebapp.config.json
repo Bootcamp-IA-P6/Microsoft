@@ -1,0 +1,11 @@
+{
+  "mimeTypes": {
+    ".mjs": "text/javascript",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".pbf": "application/x-protobuf"
+  },
+  "navigationFallback": {
+    "rewrite": "/index.html"
+  }
+}

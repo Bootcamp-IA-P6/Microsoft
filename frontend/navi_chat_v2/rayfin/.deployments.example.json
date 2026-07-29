@@ -1,0 +1,15 @@
+{
+  "deployments": {
+    "my-app": {
+      "fabricItemId": "00000000-0000-0000-0000-000000000000",
+      "fabricApiUrl": "https://.../webapi/capacities/.../workloads/.../appbackends/.../",
+      "fabricWorkspaceId": "00000000-0000-0000-0000-000000000000",
+      "fabricTenantId": "00000000-0000-0000-0000-000000000000",
+      "publishableKey": "pk-xxxxxxxxxxxxxxxxxxxx",
+      "hostingUrl": "https://your-app.westeurope.webapp.fabricapps.net",
+      "fabricDeepLink": "https://app.fabric.microsoft.com/groups/.../appbackends/...",
+      "deployedAt": "2026-01-01T00:00:00.000Z"
+    }
+  },
+  "active": "my-app"
+}

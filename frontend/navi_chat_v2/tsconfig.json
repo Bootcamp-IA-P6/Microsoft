@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "ESNext.Decorators"],
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,       // ← AÑADIDO: acepta archivos .jsx/.js
+    "checkJs": false,      // ← AÑADIDO: pero sin analizarlos con TS estricto
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "noEmit": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "types": ["vite/client", "geojson"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "./rayfin" }]
+}
