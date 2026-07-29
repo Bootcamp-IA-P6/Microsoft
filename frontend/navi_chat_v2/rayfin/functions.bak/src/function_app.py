@@ -14,7 +14,7 @@ no se instala por pip.  Este archivo se sube directamente a través del portal
 de Fabric (Fabric UDF) o la API REST de UserDataFunctions.
 
 Dependencias pip necesarias en el entorno UDF:
-    mcp  (SDK MCP Python: ClientSession + streamablehttp_client)
+    mcp  (SDK MCP Python: ClientSession + streamable_http_client)
     azure-identity  (ManagedIdentityCredential / DefaultAzureCredential)
 
 =============================================================================
@@ -36,43 +36,75 @@ PASOS MANUALES FUERA DE ESTE CÓDIGO (no los ejecuto yo):
    aceptar el origen del frontend:
        https://handy-north-cb414576f1-westeurope.webapp.fabricapps.net
 
-5. Asegurar que la variable de entorno DATA_AGENT_URL está definida en el
+5. Asegurar que DATA_AGENT_URL o FABRIC_MCP_URL está definida en el
    entorno del UDF de Fabric (apunta al endpoint MCP del Data Agent).
 =============================================================================
 """
 
 import os
+import re
+import time
 from typing import Any
 
 import fabric.functions as fn
 from azure.identity import DefaultAzureCredential
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default"
+
+# Caché global a nivel de módulo (persiste entre requests del runtime UDF)
+_cached_token: str | None = None
+_token_expires_at: float = 0
+_cached_tool_name: str | None = None
+
+
+_credential = DefaultAzureCredential()
 
 
 def _get_auth_headers() -> dict[str, str]:
     """
     Obtiene un token de acceso Fabric usando la Managed Identity del runtime
-    UDF.  DefaultAzureCredential intenta, en orden:
+    UDF, con caché (refresca 60 s antes de expirar).
+    DefaultAzureCredential intenta, en orden:
       1. EnvironmentCredential (vars AZURE_*)
       2. ManagedIdentityCredential (la identidad del resource en Fabric)
       3. AzureCliCredential (solo desarrollo local con `az login`)
     """
-    credential = DefaultAzureCredential()
-    token = credential.get_token(FABRIC_SCOPE)
-    return {"Authorization": f"Bearer {token.token}"}
+    global _cached_token, _token_expires_at
+
+    now = time.time()
+    if not _cached_token or now >= _token_expires_at - 60:
+        token = _credential.get_token(FABRIC_SCOPE)
+        _cached_token = token.token
+        _token_expires_at = token.expires_on
+
+    return {"Authorization": f"Bearer {_cached_token}"}
+
+
+def _get_data_agent_url() -> str:
+    """
+    Resuelve la URL del Data Agent probando DATA_AGENT_URL primero y
+    FABRIC_MCP_URL como fallback (compatibilidad con agent_mcp.py).
+    """
+    url = os.getenv("DATA_AGENT_URL") or os.getenv("FABRIC_MCP_URL")
+    if not url:
+        raise RuntimeError(
+            "Falta definir DATA_AGENT_URL o FABRIC_MCP_URL en el entorno del UDF."
+        )
+    return url
 
 
 async def _call_data_agent(question: str, headers: dict[str, str]) -> str:
     """
     Conecta al Fabric Data Agent vía MCP Streamable HTTP, descubre el tool
-    disponible, invoca con userQuestion y extrae la respuesta textual.
+    disponible (con caché), invoca con userQuestion y extrae la respuesta textual.
     """
-    data_agent_url = os.environ["DATA_AGENT_URL"]
+    global _cached_tool_name
 
-    async with streamablehttp_client(data_agent_url, headers=headers) as (
+    data_agent_url = _get_data_agent_url()
+
+    async with streamable_http_client(data_agent_url, headers=headers) as (
         read,
         write,
         _,
@@ -80,14 +112,15 @@ async def _call_data_agent(question: str, headers: dict[str, str]) -> str:
         async with ClientSession(read, write) as session:
             await session.initialize()
 
-            # Descubrir el primer/único tool del Data Agent
-            tools_result = await session.list_tools()
-            if not tools_result.tools:
-                raise RuntimeError("El Data Agent no expuso ningún tool por MCP")
-            tool = tools_result.tools[0]
+            if _cached_tool_name is None:
+                tools_result = await session.list_tools()
+                if not tools_result.tools:
+                    raise RuntimeError("El Data Agent no expuso ningún tool por MCP")
+                _cached_tool_name = tools_result.tools[0].name
 
-            # Invocar con el parámetro userQuestion
-            result = await session.call_tool(tool.name, {"userQuestion": question})
+            result = await session.call_tool(
+                _cached_tool_name, {"userQuestion": question}
+            )
 
             if result.isError:
                 raise RuntimeError(
@@ -100,6 +133,37 @@ async def _call_data_agent(question: str, headers: dict[str, str]) -> str:
                 if hasattr(c, "type") and c.type == "text" and hasattr(c, "text")
             ]
             return "\n".join(text_parts) or "No se pudo obtener respuesta."
+
+
+def _enrich_response(text: str) -> dict[str, Any]:
+    """
+    Parsea el texto plano del Data Agent y extrae metadatos estructurados
+    (stop_id, line_number, wait_time) para construir el contrato
+    ChatEnrichedResponse.  map_data se deja como None porque las
+    coordenadas se resuelven desde el lado cliente.
+    """
+    chat: dict[str, Any] = {"text": text}
+    map_data: Any = None
+
+    m = re.search(r"parada\s+(\d{3,5})", text, re.IGNORECASE)
+    if m:
+        chat["stop_id"] = m.group(1)
+
+    m = re.search(r"l[ií]neas?\s*(\d+)", text, re.IGNORECASE)
+    if m:
+        chat["line_number"] = m.group(1)
+
+    m = re.search(r"parada\s+\d+\s*[\(]?([A-Za-zÁÉÍÓÚÑáéíóúñ\s]+)[\)]?", text)
+    if m:
+        candidate = m.group(1).strip().rstrip(")")
+        if candidate:
+            chat["stop_name"] = candidate
+
+    m = re.search(r"(?:en|tarda)\s*(\d+)\s*(?:minutos?|min)", text, re.IGNORECASE)
+    if m:
+        chat["wait_time"] = f"{m.group(1)} min"
+
+    return {"chat_message": chat, "map_data": map_data}
 
 
 def _mock_answer(question: str) -> str:
@@ -123,8 +187,28 @@ def _mock_answer(question: str) -> str:
     )
 
 
+def _validate_feedback(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Valida y normaliza el payload de feedback entrante.
+    Retorna el payload limpio o lanza ValueError si es inválido.
+    """
+    msg_id = payload.get("message_id")
+    fb_type = payload.get("feedback_type")
+    if not msg_id:
+        raise ValueError("message_id es requerido")
+    if fb_type not in ("like", "dislike"):
+        raise ValueError("feedback_type debe ser 'like' o 'dislike'")
+    return {
+        "message_id": str(msg_id),
+        "feedback_type": fb_type,
+        "question": str(payload.get("question", "")),
+        "answer_text": str(payload.get("answer_text", "")),
+        "timestamp": int(payload.get("timestamp", time.time() * 1000)),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Registro de la User Data Function
+# Registro de las User Data Functions
 # ---------------------------------------------------------------------------
 
 udf = fn.UserDataFunctions()
@@ -140,15 +224,53 @@ async def chat(question: str, language: str) -> dict[str, Any]:
         language  (str): Código de idioma (ej. "es", "en").
 
     Retorna:
-        dict:  {"answerText": str}
+        dict:  {"chat_message": {"text": str, "stop_id"?: str, ...}, "map_data": null}
     """
-    if not os.environ.get("DATA_AGENT_URL"):
-        return {"answerText": _mock_answer(question)}
+    if not os.getenv("DATA_AGENT_URL") and not os.getenv("FABRIC_MCP_URL"):
+        return _enrich_response(_mock_answer(question))
 
     try:
         headers = _get_auth_headers()
         answer_text = await _call_data_agent(question, headers)
-        return {"answerText": answer_text}
+        return _enrich_response(answer_text)
     except Exception as exc:
         print(f"[UDF] Error al llamar al Data Agent: {exc}")
-        return {"answerText": _mock_answer(question)}
+        return _enrich_response(_mock_answer(question))
+
+
+@udf.function()
+def save_feedback(
+    message_id: str,
+    feedback_type: str,
+    question: str,
+    answer_text: str,
+    timestamp: int,
+) -> dict[str, Any]:
+    """
+    Recibe feedback del usuario (like/dislike) sobre una respuesta.
+    Por ahora persiste en logs; en producción conectar a una tabla
+    Fabric Lakehouse / Kusto / SQL.
+
+    Parámetros:
+        message_id    (str): ID único del mensaje en el frontend.
+        feedback_type (str): "like" o "dislike".
+        question      (str): Pregunta original del usuario.
+        answer_text   (str): Respuesta del agente.
+        timestamp     (int): Timestamp (ms) del mensaje original.
+
+    Retorna:
+        dict: {"status": "ok", "message_id": str}
+    """
+    payload = _validate_feedback({
+        "message_id": message_id,
+        "feedback_type": feedback_type,
+        "question": question,
+        "answer_text": answer_text,
+        "timestamp": timestamp,
+    })
+
+    print(f"[FEEDBACK] message_id={payload['message_id']} "
+          f"type={payload['feedback_type']} "
+          f"question={payload['question']!r} "
+          f"answer_len={len(payload['answer_text'])}")
+    return {"status": "ok", "message_id": payload["message_id"]}

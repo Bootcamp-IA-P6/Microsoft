@@ -50,4 +50,11 @@ frontend/navi_chat_v2/node_modules
 .temp/
 
 frontend/navi_chat_v2/tsconfig.tsbuildinfo
+frontend/navi_chat_v2/rayfin/.deployments.json
+frontend/navi_chat_v2/test-chat-real.mjs
+dist/
+.kiro/
+implementacion-para-mejoras.md
+agent-instructions-v2.md
+informe-sesion-2026-07-29.md
 dist/

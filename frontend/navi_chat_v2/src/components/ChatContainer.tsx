@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import ChatMessage from './ChatMessage';
 import NaviMascot from './NaviMascot'; // === NAVI-MAP: tu componente de mascota, reemplaza el <img icon-navi.svg> que había acá ===
-import { askAgent } from '@/services/agentService';
-import type { ChatResponse } from '@/services/agentService';
+import { askAgent, sendFeedbackToFabric } from '@/services/agentService';
+import type { ChatResponse, MapData } from '@/services/agentService';
 import { extractAllStops } from '@/services/parseStops';
 import { enrichStopQuery } from '@/utils/enrichQuery';
+import { getStopCoords } from '@/utils/geoData';
+import { stopById } from '@/utils/stopsFromGold';
 import type { Lang } from '@/i18n/translations';
 import { t, speechLang } from '@/i18n/translations';
 
@@ -20,6 +22,12 @@ interface Message {
   role: 'user' | 'agent';
   text: string;
   matchedStops?: string[];
+  timestamp: number;
+  feedback?: 'like' | 'dislike' | null;
+  feedbackSent?: boolean;
+  questionText?: string;
+  mapData?: MapData | null;
+  agentMeta?: { stop_id?: string; stop_name?: string; line_number?: string; wait_time?: string };
 }
 
 export interface FlyTarget {
@@ -34,12 +42,6 @@ interface ChatContainerProps {
   onFirstMessage?: () => void;
 }
 
-const SUGGESTIONS = [
-  { label: '🚍 Línea 5 en Sol - Sevilla', query: '¿Cuánto tarda la línea 5 en la parada 5907 (Sevilla)?' },
-  { label: '📍 Paradas cercanas en Lavapiés', query: '¿Qué paradas de autobús hay cerca de Lavapiés?' },
-  { label: '⚠️ Incidencias en la línea 27', query: '¿Hay incidencias activas en la línea 27?' },
-];
-
 export default function ChatContainer({ language, onQuickAction, onFirstMessage }: ChatContainerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -49,6 +51,8 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -95,10 +99,13 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
   async function handleSend(question: string) {
     if (!question.trim() || isLoading) return;
 
+    const now = Date.now();
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       text: question,
+      timestamp: now,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -112,21 +119,67 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
 
     try {
       const enriched = enrichStopQuery(question);
-      const { answerText }: ChatResponse = await askAgent(enriched, language);
+      const response: ChatResponse = await askAgent(enriched, language);
+      const answerText = response.chat_message.text;
+      const mapData = response.map_data;
       const matchedStops = extractAllStops(answerText, question);
+
+      let resolvedMapData = mapData;
+      // Resolver stop_id para coords y para pasar al mapa
+      const sid = response.chat_message.stop_id
+        || answerText.match(/parada\s+(\d{3,5})/i)?.[1]
+        || question.match(/parada\s+(\d{3,5})/i)?.[1]
+        || '';
+      if (!resolvedMapData) {
+        // Prioridad: buscar por stop_id exacto (evita colisiones de nombre)
+        // Fallback: buscar por stop_name (para quick-actions y preguntas sin ID)
+        const byId = sid ? stopById[sid] : undefined;
+        const stopCoords = byId
+          ? [byId.lon, byId.lat] as [number, number]
+          : getStopCoords(response.chat_message.stop_name || '');
+        if (stopCoords) {
+          resolvedMapData = {
+            type: 'bus_stop_and_route',
+            stop_coordinates: stopCoords,
+          };
+        }
+      }
 
       const agentMsg: Message = {
         id: crypto.randomUUID(),
         role: 'agent',
         text: answerText,
         matchedStops,
+        timestamp: Date.now(),
+        questionText: question,
+        mapData: resolvedMapData,
+        agentMeta: {
+          stop_id: response.chat_message.stop_id,
+          stop_name: response.chat_message.stop_name,
+          line_number: response.chat_message.line_number,
+          wait_time: response.chat_message.wait_time,
+        },
       };
       setMessages((prev) => [...prev, agentMsg]);
-    } catch {
+
+      if (resolvedMapData?.stop_coordinates) {
+        window.dispatchEvent(new CustomEvent('map:showRoute', {
+          detail: {
+            stopCoordinates: resolvedMapData.stop_coordinates,
+            stopName: response.chat_message.stop_name || matchedStops?.[0] || '',
+            stopId: sid || '',
+            lineLabel: response.chat_message.line_number || '',
+          },
+        }));
+      }
+    } catch (err) {
+      console.error('[askAgent error]', err);
       const errorMsg: Message = {
         id: crypto.randomUUID(),
         role: 'agent',
         text: t(language, 'error'),
+        timestamp: Date.now(),
+        questionText: question,
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -135,12 +188,58 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
     }
   }
 
+  function handleSendFeedback(messageId: string, feedback: 'like' | 'dislike') {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg || msg.role !== 'agent' || msg.feedbackSent) return;
+
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, feedback, feedbackSent: true } : m))
+    );
+
+    const feedbackType = feedback === 'like' ? 'Like' : 'Dislike';
+    sendFeedbackToFabric(messageId, feedbackType, msg.questionText ?? '', msg.text);
+  }
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { question } = (e as CustomEvent).detail;
+      if (question) handleSendRef.current(question);
+    };
+    window.addEventListener('chat:ask', handler);
+    return () => window.removeEventListener('chat:ask', handler);
+  }, []);
+
   const hasMessages = messages.length > 0 || isLoading;
 
   const quickActions = [
-    { label: t(language, 'quickNextBus'), prompt: t(language, 'quickNextBusPrompt') },
-    { label: t(language, 'quickHowReach'), prompt: t(language, 'quickHowReachPrompt') },
-    { label: t(language, 'quickDelays'), prompt: t(language, 'quickDelaysPrompt') },
+    { labelKey: 'quickC1Bus', promptKey: 'quickC1BusPrompt' },
+    { labelKey: 'quickCibeles', promptKey: 'quickCibelesPrompt' },
+    { labelKey: 'quickLine27', promptKey: 'quickLine27Prompt' },
+    { labelKey: 'quickM1Freq', promptKey: 'quickM1FreqPrompt' },
+  ] as const;
+
+  const quickActionIcons = [
+    <svg key="bus" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="7" width="18" height="12" rx="2" />
+      <line x1="3" y1="11" x2="21" y2="11" />
+      <line x1="7" y1="4" x2="7" y2="7" />
+      <line x1="17" y1="4" x2="17" y2="7" />
+      <circle cx="8" cy="18" r="1.5" />
+      <circle cx="16" cy="18" r="1.5" />
+    </svg>,
+    <svg key="pin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2a8 8 0 0 0-8 8c0 5.4 8 12 8 12s8-6.6 8-12a8 8 0 0 0-8-8z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>,
+    <svg key="alert" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3L2 21h20L12 3z" />
+      <line x1="12" y1="9" x2="12" y2="14" />
+      <circle cx="12" cy="17.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>,
+    <svg key="clock" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>,
   ];
 
   // ============================================================
@@ -164,7 +263,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
             <div className="empty-state__quick-actions">
               {quickActions.map((action, i) => (
                 <button
-                  key={action.prompt}
+                  key={action.promptKey}
                   type="button"
                   onClick={() => {
                     onQuickAction?.(QUICK_ACTION_TARGETS[i]);
@@ -172,12 +271,13 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
                       setHasSentFirst(true);
                       onFirstMessage?.();
                     }
-                    handleSend(action.prompt);
+                    handleSend(t(language, action.promptKey));
                   }}
                   disabled={isLoading}
                   className="action-chip"
                 >
-                  {action.label}
+                  {quickActionIcons[i]}
+                  <span>{t(language, action.labelKey)}</span>
                 </button>
               ))}
             </div>
@@ -192,7 +292,19 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
         ) : (
           <div className="chat-window__log" role="log" aria-live="polite" aria-relevant="additions">
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} role={msg.role} text={msg.text} matchedStops={msg.matchedStops} />
+              <ChatMessage
+                key={msg.id}
+                messageId={msg.id}
+                role={msg.role}
+                text={msg.text}
+                matchedStops={msg.matchedStops}
+                timestamp={msg.timestamp}
+                feedback={msg.feedback}
+                feedbackSent={msg.feedbackSent}
+                onFeedback={handleSendFeedback}
+                mapData={msg.mapData}
+                agentMeta={msg.agentMeta}
+              />
             ))}
             {isLoading && (
               <div className="chat-message chat-message--agent chat-message--loading">
@@ -262,7 +374,8 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
 }
 
 const QUICK_ACTION_TARGETS: FlyTarget[] = [
-  { lng: -3.7008, lat: 40.4088, zoom: 15 },
-  { lng: -3.6892, lat: 40.4669, zoom: 15 },
-  { lng: -3.7038, lat: 40.4168, zoom: 13 },
+  { lng: -3.69827, lat: 40.41848, zoom: 16.5 },  // Sevilla (3698)
+  { lng: -3.69849, lat: 40.41796, zoom: 16.5 },  // Sol - Sevilla (5907)
+  { lng: -3.7003, lat: 40.4172, zoom: 15 },       // Centro zona (incidencias)
+  { lng: -3.7003, lat: 40.4172, zoom: 15 },       // Centro zona (frecuencia)
 ];
