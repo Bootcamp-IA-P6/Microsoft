@@ -2,21 +2,27 @@
 Fabric User Data Function item: udf-emt-ingest
 PASTE THIS ENTIRE FILE into the UDF (single-module).
 
-Phase 4 production poller:
-  - Scope stops = ALL distinct stop_id from Lakehouse silver_arrives (bootstrap catalogue)
-  - Optional stopIdsCsv override / batchOffset+batchLimit for Pipeline chunking
-  - Arrives → bronze + silver_arrives facts → Eventstreams
-  - Alerts → full GTFS-RT decode → bronze + silver_alerts → Eventstreams
-  - Gold ETA patch + gold alerts patch events (EH applies / or KQL MV)
+Phase 4–5 production poller:
+  - Catalogue LH: poll_*_scope (dual-run / rollback)
+  - Catalogue EH: poll_*_scope_eh via Kusto REST (Query URI + SPN in Variable Library)
+  - Arrives → es_emt_arrives + es_emt_arrives_silver
+  - Alerts → es_emt_alerts + es_emt_alerts_silver
+  - Phase 5 seeds: nb_bootstrap_eh_silver → es_emt_arrives_silver (silver_arrives_seed)
+  - Step C smoke: emit_seed_smoke_from_lh
 
 Libraries (Library management → Publish):
   requests==2.32.5
-  azure-eventhub==5.15.1
+  (send + SPN token = requests only; azure-eventhub / azure-identity not required)
 
 Connections (Manage connections):
-  - Lakehouse alias → parameter lhSql (FabricLakehouseClient + connectToSql)
-  - Variable Library varemtmadrid → parameter varLib
-  Do NOT use FabricSqlConnection.connect() for a Lakehouse connection.
+  - lhemtmadrid → Lakehouse (poll_*_scope / emit_seed_smoke_from_lh only)
+  - varemtmadrid → Variable Library:
+      EMT_CLIENT_ID, EMT_MADRID_PASS_KEY
+      FABRIC_TENANT_ID, FABRIC_SP_CLIENT_ID, FABRIC_SP_CLIENT_SECRET, EH_QUERY_URI
+      ARRIVES_BRONZE_CONN, ARRIVES_SILVER_CONN [, ARRIVES_*_HUB]
+      ALERTS_BRONZE_CONN, ALERTS_SILVER_CONN [, ALERTS_*_HUB]
+      (optional GOLD_PATCH_CONN / GOLD_PATCH_HUB)
+    Code CONN constants stay empty — paste once into VL, not into UDF on every publish.
 """
 import hashlib
 import json
@@ -57,12 +63,30 @@ STALE_AFTER_SEC_DEFAULT = 900
 # Lakehouse *item* name for three-part SQL (NOT the UDF connection alias `lhemtmadrid`)
 LH_SQL_DB = "lh_emt_madrid"
 
-# --- Eventstream connection strings (Custom endpoint → SAS primary) ---
+# Eventhouse Kusto REST (poll_*_scope_eh). No Lakehouse shortcut required.
+# Portal: Eventhouse → copy **Query** URI (NOT Ingest URI — no "ingest-" prefix).
+# Prefer VL key EH_QUERY_URI; paste here only if you want it in code.
+EH_QUERY_URI = ""
+EH_KQL_DB = "db_emt"
+# Entra token audience for Fabric/ADX query API
+KUSTO_TOKEN_SCOPE = "https://kusto.kusto.windows.net/.default"
+
+# Dedup smoke+full same-day seeds; smaller payload than raw catalogue_latest().
+CATALOGUE_KQL = """
+silver_arrives_catalogue_latest()
+| summarize arg_max(ingested_at, *) by stop_id, line_id, direction_id
+| project stop_id, line_id, direction_id, line_label, stop_name, stop_lat, stop_lon,
+          direction_text, name_a, name_b, is_terminus, catalog_loaded_at, day_type
+"""
+
+# --- Eventstream (Custom endpoint SAS) — prefer Variable Library; constants = optional override ---
+# VL keys (same names): ARRIVES_BRONZE_CONN, ARRIVES_SILVER_CONN, ALERTS_BRONZE_CONN,
+#   ALERTS_SILVER_CONN, optional *_HUB and GOLD_PATCH_CONN / GOLD_PATCH_HUB
 ARRIVES_BRONZE_CONN = ""
 ARRIVES_SILVER_CONN = ""
 ALERTS_BRONZE_CONN = ""
 ALERTS_SILVER_CONN = ""
-GOLD_PATCH_CONN = ""  # optional: gold_arrives_patch / gold_alerts_patch events
+GOLD_PATCH_CONN = ""
 ARRIVES_BRONZE_HUB = ""
 ARRIVES_SILVER_HUB = ""
 ALERTS_BRONZE_HUB = ""
@@ -178,32 +202,93 @@ def _bronze(source_system, resource_kind, resource_key, http_status, payload_obj
     }
 
 
+def _parse_eventhub_conn(conn_str: str) -> dict:
+    parts = {}
+    for piece in (conn_str or "").split(";"):
+        if "=" not in piece:
+            continue
+        k, v = piece.split("=", 1)
+        parts[k.strip()] = v.strip()
+    endpoint = parts.get("Endpoint", "")
+    host = (
+        endpoint.replace("sb://", "")
+        .replace("https://", "")
+        .replace("http://", "")
+        .strip()
+        .strip("/")
+    )
+    return {
+        "host": host,
+        "key_name": parts.get("SharedAccessKeyName", ""),
+        "key": parts.get("SharedAccessKey", ""),
+        "hub": parts.get("EntityPath", ""),
+    }
+
+
+def _eventhub_sas_token(resource_uri: str, key_name: str, key: str, *, ttl_sec: int = 3600) -> str:
+    import base64
+    import hmac
+    import urllib.parse
+
+    expiry = int(time.time()) + int(ttl_sec)
+    encoded_uri = urllib.parse.quote_plus(resource_uri.rstrip("/"))
+    to_sign = f"{encoded_uri}\n{expiry}".encode("utf-8")
+    sig = base64.b64encode(
+        hmac.new(key.encode("utf-8"), to_sign, hashlib.sha256).digest()
+    ).decode("utf-8")
+    return (
+        "SharedAccessSignature "
+        f"sr={encoded_uri}&sig={urllib.parse.quote_plus(sig)}&se={expiry}&skn={key_name}"
+    )
+
+
 def _send(conn_str: str, hub: str, events: list) -> int:
+    """Eventstream Custom endpoint via requests+SAS (HTTP timeout). No azure.eventhub — that SDK can hang forever in UDF."""
     if not events:
         return 0
     if not (conn_str or "").strip():
-        raise ValueError("Eventstream connection string empty — set CONN constants after Custom endpoint Publish")
-    from azure.eventhub import EventData, EventHubProducerClient
-    kwargs = {"conn_str": conn_str}
-    if (hub or "").strip():
-        kwargs["eventhub_name"] = hub.strip()
-    producer = EventHubProducerClient.from_connection_string(**kwargs)
-    # Event Hubs max batch ~1MB; chunk
+        raise ValueError(
+            "Eventstream connection string empty — set VL keys "
+            "ARRIVES_BRONZE_CONN / ARRIVES_SILVER_CONN (and alerts) "
+            "or optional code CONN constants after Custom endpoint Publish"
+        )
+    parsed = _parse_eventhub_conn(conn_str)
+    hub_name = (hub or "").strip() or parsed.get("hub") or ""
+    if not parsed["host"] or not parsed["key_name"] or not parsed["key"]:
+        raise ValueError(
+            "Eventstream conn missing Endpoint / SharedAccessKeyName / SharedAccessKey"
+        )
+    if not hub_name:
+        raise ValueError(
+            "Event hub name missing — set ARRIVES_*_HUB / ALERTS_*_HUB or EntityPath in conn"
+        )
+    resource_uri = f"https://{parsed['host']}/{hub_name}"
+    post_url = f"{resource_uri}/messages"
+    token = _eventhub_sas_token(resource_uri, parsed["key_name"], parsed["key"])
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/vnd.microsoft.servicebus.json",
+    }
     sent = 0
-    chunk: list = []
+    batch: list = []
     size = 0
-    with producer:
-        for ev in events:
-            raw = json.dumps(ev, ensure_ascii=False, default=str)
-            if chunk and size + len(raw) > 900_000:
-                producer.send_batch([EventData(x) for x in chunk])
-                sent += len(chunk)
-                chunk, size = [], 0
-            chunk.append(raw)
-            size += len(raw)
-        if chunk:
-            producer.send_batch([EventData(x) for x in chunk])
-            sent += len(chunk)
+    for ev in events:
+        raw = json.dumps(ev, ensure_ascii=False, default=str)
+        entry = {"Body": raw}
+        entry_len = len(raw) + 32
+        if batch and size + entry_len > 900_000:
+            resp = requests.post(post_url, headers=headers, data=json.dumps(batch), timeout=60)
+            if resp.status_code >= 300:
+                raise RuntimeError(f"Event Hub send HTTP {resp.status_code}: {resp.text[:300]}")
+            sent += len(batch)
+            batch, size = [], 0
+        batch.append(entry)
+        size += entry_len
+    if batch:
+        resp = requests.post(post_url, headers=headers, data=json.dumps(batch), timeout=60)
+        if resp.status_code >= 300:
+            raise RuntimeError(f"Event Hub send HTTP {resp.status_code}: {resp.text[:300]}")
+        sent += len(batch)
     return sent
 
 
@@ -312,17 +397,81 @@ def decode_feed_to_dict(raw: bytes) -> dict:
     return _pb_parse(raw, 0, len(raw), {1: h_header, 2: h_ent}, out=out)[0]
 
 
-def _creds(varLib, clientId: str, passKey: str):
+def _vl_all(varLib) -> dict:
+    """One Variable Library round-trip per invocation (getVariables is slow ~2–4s)."""
+    if varLib is None:
+        return {}
+    raw = varLib.getVariables() or {}
+    try:
+        return {str(k): v for k, v in raw.items()}
+    except Exception:  # noqa: BLE001
+        return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _run_with_timeout(label: str, fn_call, timeout_sec: float):
+    """Fail fast if Fabric SDK / network call hangs past timeout_sec."""
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(fn_call)
+        try:
+            return fut.result(timeout=float(timeout_sec))
+        except concurrent.futures.TimeoutError as exc:
+            raise TimeoutError(
+                f"{label} hung >{timeout_sec:.0f}s — cancel Test; check VL connection / network"
+            ) from exc
+
+
+def _vl_all_bounded(varLib, timeout_sec: float = 25.0) -> dict:
+    return _run_with_timeout("varLib.getVariables", lambda: _vl_all(varLib), timeout_sec)
+
+
+def _vl_pick(variables: dict, *keys: str) -> str:
+    for k in keys:
+        v = variables.get(k) if variables else None
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return ""
+
+
+def _creds(varLib, clientId: str, passKey: str, variables: dict = None):
     if clientId and passKey:
         return clientId, passKey
-    if varLib is None:
-        raise ValueError("Pass clientId/passKey or connect Variable Library")
-    variables = varLib.getVariables()
-    cid = (clientId or variables.get("EMT_CLIENT_ID") or "").strip()
-    pk = (passKey or variables.get("EMT_MADRID_PASS_KEY") or "").strip()
+    if variables is None:
+        if varLib is None:
+            raise ValueError("Pass clientId/passKey or connect Variable Library")
+        variables = _vl_all(varLib)
+    cid = (clientId or _vl_pick(variables, "EMT_CLIENT_ID") or "").strip()
+    pk = (passKey or _vl_pick(variables, "EMT_MADRID_PASS_KEY") or "").strip()
     if not cid or not pk:
         raise ValueError("EMT_CLIENT_ID / EMT_MADRID_PASS_KEY missing")
     return cid, pk
+
+
+def _es_cfg(variables: dict = None) -> dict:
+    """Resolve Eventstream SAS from VL first, then code constants (usually empty)."""
+    v = variables or {}
+
+    def one(vl_key: str, const_val: str) -> str:
+        return _vl_pick(v, vl_key) or (const_val or "").strip()
+
+    bronze = one("ARRIVES_BRONZE_CONN", ARRIVES_BRONZE_CONN)
+    silver = one("ARRIVES_SILVER_CONN", ARRIVES_SILVER_CONN) or bronze
+    alerts_b = one("ALERTS_BRONZE_CONN", ALERTS_BRONZE_CONN) or bronze
+    alerts_s = one("ALERTS_SILVER_CONN", ALERTS_SILVER_CONN) or alerts_b
+    return {
+        "arrives_bronze_conn": bronze,
+        "arrives_bronze_hub": one("ARRIVES_BRONZE_HUB", ARRIVES_BRONZE_HUB),
+        "arrives_silver_conn": silver,
+        "arrives_silver_hub": one("ARRIVES_SILVER_HUB", ARRIVES_SILVER_HUB)
+        or one("ARRIVES_BRONZE_HUB", ARRIVES_BRONZE_HUB),
+        "alerts_bronze_conn": alerts_b,
+        "alerts_bronze_hub": one("ALERTS_BRONZE_HUB", ALERTS_BRONZE_HUB),
+        "alerts_silver_conn": alerts_s,
+        "alerts_silver_hub": one("ALERTS_SILVER_HUB", ALERTS_SILVER_HUB),
+        "gold_patch_conn": one("GOLD_PATCH_CONN", GOLD_PATCH_CONN),
+        "gold_patch_hub": one("GOLD_PATCH_HUB", GOLD_PATCH_HUB),
+    }
 
 
 def _login(client_id: str, pass_key: str) -> str:
@@ -393,9 +542,9 @@ def _fetch_arrives(token: str, stop_id: str):
     return None, 0, f"retries_exhausted:{last_err}", sid
 
 
-def _sql_table(name: str) -> str:
-    """Three-part name: [LakehouseItem].[dbo].[table] — alias ≠ item name."""
-    return f"[{LH_SQL_DB}].[dbo].[{name}]"
+def _sql_table(name: str, db: str = None) -> str:
+    """Three-part name: [Item].[dbo].[table] — alias ≠ item name."""
+    return f"[{db or LH_SQL_DB}].[dbo].[{name}]"
 
 
 def _connect_sql(lakehouse: fn.FabricLakehouseClient):
@@ -403,51 +552,14 @@ def _connect_sql(lakehouse: fn.FabricLakehouseClient):
     return lakehouse.connectToSql()
 
 
-def _load_scope_and_catalogue(lakehouse: fn.FabricLakehouseClient):
-    """All in-scope stops + catalogue grains from Lakehouse silver_arrives (bootstrap)."""
-    if lakehouse is None:
-        raise ValueError("Lakehouse connection required (alias lhemtmadrid)")
-    conn = _connect_sql(lakehouse)
-    cur = conn.cursor()
-    # T-SQL / ODBC: use 1 not true for bit/boolean columns
-    try:
-        cur.execute(
-            f"""
-            SELECT stop_id, line_id, direction_id, line_label, stop_name, stop_lat, stop_lon,
-                   direction_text, name_a, name_b, is_terminus, catalog_loaded_at, day_type
-            FROM {_sql_table("silver_arrives")}
-            WHERE bus_id IS NULL AND map_ok = 1 AND direction_id IS NOT NULL
-            """
-        )
-    except Exception as exc:  # noqa: BLE001
-        # Helpful hint when LH_SQL_DB does not match the workspace lakehouse item name
-        try:
-            cur2 = conn.cursor()
-            cur2.execute(
-                "SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name"
-            )
-            dbs = [str(r[0]) for r in cur2.fetchall()]
-            cur2.close()
-        except Exception:  # noqa: BLE001
-            dbs = []
-        raise RuntimeError(
-            f"SQL failed on {_sql_table('silver_arrives')}: {exc}. "
-            f"Set LH_SQL_DB to your Lakehouse *item* name (not alias lhemtmadrid). "
-            f"Visible DBs sample: {dbs[:20]}"
-        ) from exc
-
-    cols = [d[0] for d in cur.description]
-    rows = [dict(zip(cols, row)) for row in cur.fetchall()]
-    cur.close()
-    conn.close()
+def _index_catalogue_rows(rows: list):
     if not rows:
-        raise RuntimeError("No catalogue rows in silver_arrives — run daily bootstrap first")
+        raise RuntimeError("No catalogue rows — run Phase 5 EH bootstrap (or LH bootstrap) first")
     cat_by_grain, grains_by_stop, label_at_stop, line_names = {}, {}, {}, {}
     day_type = "LA"
     stops = set()
     for r in rows:
         sid, lid, did = str(r["stop_id"]), str(r["line_id"]), int(r["direction_id"])
-        # normalize types from SQL
         r = {**r, "stop_id": sid, "line_id": lid, "direction_id": did, "line_label": str(r["line_label"])}
         cat_by_grain[(sid, lid, did)] = r
         grains_by_stop.setdefault(sid, []).append(((sid, lid, did), r))
@@ -457,6 +569,140 @@ def _load_scope_and_catalogue(lakehouse: fn.FabricLakehouseClient):
         if r.get("day_type"):
             day_type = str(r["day_type"])
     return sorted(stops), cat_by_grain, grains_by_stop, label_at_stop, line_names, day_type, rows
+
+
+def _fetch_sql_dicts(conn, sql: str) -> list:
+    cur = conn.cursor()
+    try:
+        cur.execute(sql)
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _load_scope_and_catalogue(lakehouse: fn.FabricLakehouseClient):
+    """Lakehouse silver_arrives catalogue (legacy / dual-run). bus_id NULL seed-shaped rows."""
+    if lakehouse is None:
+        raise ValueError("Lakehouse connection required (alias lhemtmadrid)")
+    conn = _connect_sql(lakehouse)
+    try:
+        rows = _fetch_sql_dicts(
+            conn,
+            f"""
+            SELECT stop_id, line_id, direction_id, line_label, stop_name, stop_lat, stop_lon,
+                   direction_text, name_a, name_b, is_terminus, catalog_loaded_at, day_type
+            FROM {_sql_table("silver_arrives")}
+            WHERE bus_id IS NULL AND map_ok = 1 AND direction_id IS NOT NULL
+            """,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"SQL failed on {_sql_table('silver_arrives')}: {exc}. "
+            f"Set LH_SQL_DB to your Lakehouse *item* name (not alias lhemtmadrid)."
+        ) from exc
+    return _index_catalogue_rows(rows)
+
+
+def _normalize_query_uri(uri: str) -> str:
+    """Query URI only — rewrite mistaken Ingest URI (ingest- host) to query host."""
+    u = (uri or "").strip().rstrip("/")
+    if not u:
+        return ""
+    # https://ingest-trd-....kusto.fabric.microsoft.com → https://trd-....
+    low = u.lower()
+    if "://ingest-" in low:
+        idx = low.index("://ingest-")
+        u = u[: idx + 3] + u[idx + 10 :]  # drop "ingest-" after ://
+    return u.rstrip("/")
+
+
+def _kusto_bearer_from_vars(variables: dict) -> str:
+    """Service principal token for Eventhouse query URI (UDF has no notebookutils)."""
+    tenant = _vl_pick(variables, "FABRIC_TENANT_ID", "EH_SP_TENANT_ID")
+    client_id = _vl_pick(variables, "FABRIC_SP_CLIENT_ID", "EH_SP_CLIENT_ID")
+    secret = _vl_pick(variables, "FABRIC_SP_CLIENT_SECRET", "EH_SP_CLIENT_SECRET")
+    if not tenant or not client_id or not secret:
+        raise ValueError(
+            "Variable Library needs FABRIC_TENANT_ID + FABRIC_SP_CLIENT_ID + "
+            "FABRIC_SP_CLIENT_SECRET (SPN with workspace access to Eventhouse)"
+        )
+    # requests token endpoint (timeout) — azure.identity get_token can hang in UDF
+    token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+    resp = requests.post(
+        token_url,
+        data={
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": secret,
+            "scope": KUSTO_TOKEN_SCOPE,
+        },
+        timeout=30,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"SPN token HTTP {resp.status_code}: {resp.text[:300]}")
+    tok = (resp.json() or {}).get("access_token")
+    if not tok:
+        raise RuntimeError("SPN token response missing access_token")
+    return tok
+
+
+def _kusto_query_rows(query_uri: str, database: str, csl: str, token: str) -> list:
+    base = _normalize_query_uri(query_uri)
+    if not base:
+        raise ValueError("EH_QUERY_URI empty — paste Eventhouse Query URI in UDF or Variable Library")
+    url = f"{base}/v1/rest/query"
+    resp = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        json={"db": database, "csl": csl},
+        timeout=60,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Kusto query HTTP {resp.status_code}: {resp.text[:400]}")
+    payload = resp.json()
+    if payload.get("error"):
+        raise RuntimeError(f"Kusto query error: {payload.get('error')}")
+    tables = payload.get("Tables") or []
+    if not tables:
+        return []
+    cols = [c["ColumnName"] for c in (tables[0].get("Columns") or [])]
+    rows = []
+    for row in tables[0].get("Rows") or []:
+        rows.append(dict(zip(cols, row)))
+    return rows
+
+
+def _load_scope_and_catalogue_eh(varLib: fn.FabricVariablesClient, variables: dict = None):
+    """
+    Eventhouse catalogue via Kusto REST (Query URI).
+    Same filter as silver_arrives_catalogue_latest() — seeds only, max catalog_loaded_at.
+    Pass variables= from a single _vl_all() to avoid repeated getVariables().
+    """
+    if variables is None:
+        variables = _vl_all(varLib)
+    uri = _normalize_query_uri(
+        _vl_pick(variables, "EH_QUERY_URI") or (EH_QUERY_URI or "").strip()
+    )
+    db = (
+        _vl_pick(variables, "EH_KQL_DB") or (EH_KQL_DB or "").strip() or "db_emt"
+    )
+    token = _kusto_bearer_from_vars(variables)
+    try:
+        rows = _kusto_query_rows(uri, db, CATALOGUE_KQL.strip(), token)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"EH Kusto catalogue failed (db={db}, uri={uri[:60]}…): {exc}. "
+            "Set EH_QUERY_URI to Query URI (not ingest-); ensure Step A catalogue helper; "
+            "SPN can query Eventhouse; run nb_bootstrap_eh_silver so seeds exist."
+        ) from exc
+    indexed = _index_catalogue_rows(rows)
+    return indexed
 
 
 def _expand_arrives(payload, resource_key, ingested_at, cat_by_grain, grains_by_stop, label_at_stop, line_names, day_type):
@@ -652,6 +898,96 @@ def ping() -> str:
     return f"udf-emt-ingest ok @ {_utc_now_z()}"
 
 
+@udf.connection(argName="varLib", alias="varemtmadrid")
+@udf.function()
+def diag_eh_ready(varLib: fn.FabricVariablesClient, pingSend: int = 0) -> str:
+    """
+    Fast connectivity check (use this when Test UI looks stuck).
+    Steps: VL → SPN token → Kusto catalogue count → parse ES CONN → optional 1-row EH send.
+    """
+    t0 = time.time()
+    parts: list = []
+
+    def ms() -> int:
+        return int((time.time() - t0) * 1000)
+
+    try:
+        variables = _vl_all_bounded(varLib, 25.0)
+        parts.append(f"vl_ok nkeys={len(variables)} ms={ms()}")
+    except Exception as exc:  # noqa: BLE001
+        return f"FAIL vl ms={ms()}: {exc}"
+
+    need = [
+        "EMT_CLIENT_ID",
+        "EMT_MADRID_PASS_KEY",
+        "FABRIC_TENANT_ID",
+        "FABRIC_SP_CLIENT_ID",
+        "FABRIC_SP_CLIENT_SECRET",
+        "EH_QUERY_URI",
+        "ARRIVES_BRONZE_CONN",
+        "ARRIVES_SILVER_CONN",
+    ]
+    missing = [k for k in need if not _vl_pick(variables, k)]
+    parts.append(
+        "vl_keys missing=[" + ",".join(missing) + "]" if missing else "vl_keys ok"
+    )
+
+    es = _es_cfg(variables)
+    parts.append(
+        f"conn_lens bronze={len(es['arrives_bronze_conn'])} "
+        f"silver={len(es['arrives_silver_conn'])} "
+        f"hub_b={es['arrives_bronze_hub'] or '-'} hub_s={es['arrives_silver_hub'] or '-'}"
+    )
+
+    try:
+        tok = _kusto_bearer_from_vars(variables)
+        parts.append(f"spn_ok token_len={len(tok)} ms={ms()}")
+    except Exception as exc:  # noqa: BLE001
+        return " | ".join(parts) + f" || FAIL spn ms={ms()}: {exc}"
+
+    uri = _normalize_query_uri(
+        _vl_pick(variables, "EH_QUERY_URI") or (EH_QUERY_URI or "").strip()
+    )
+    db = _vl_pick(variables, "EH_KQL_DB") or (EH_KQL_DB or "").strip() or "db_emt"
+    try:
+        rows = _kusto_query_rows(
+            uri,
+            db,
+            "silver_arrives_catalogue_latest() | count",
+            tok,
+        )
+        n = rows[0].get("Count", rows[0].get("count", "?")) if rows else 0
+        parts.append(f"kusto_ok db={db} catalogue_count={n} ms={ms()}")
+    except Exception as exc:  # noqa: BLE001
+        return " | ".join(parts) + f" || FAIL kusto ms={ms()}: {exc}"
+
+    if int(pingSend or 0) == 1:
+        smoke = {
+            "emt_record": "silver_arrives_seed",
+            "_rk": f"diag-{uuid.uuid4().hex[:12]}",
+            "stop_id": "0000",
+            "line_id": "000",
+            "line_label": "0",
+            "direction_id": 0,
+            "bus_id": None,
+            "destination": None,
+            "eta_seconds": None,
+            "datetime_polling": _utc_now_z(),
+            "ingested_at": _utc_now_z(),
+            "catalog_loaded_at": _utc_now_z(),
+            "day_type": "LA",
+            "map_ok": True,
+        }
+        try:
+            n_s = _send(es["arrives_silver_conn"], es["arrives_silver_hub"], [smoke])
+            parts.append(f"send_ok silver={n_s} ms={ms()}")
+        except Exception as exc:  # noqa: BLE001
+            return " | ".join(parts) + f" || FAIL send ms={ms()}: {exc}"
+
+    parts.append(f"DONE total_ms={ms()}")
+    return " | ".join(parts)
+
+
 @udf.connection(argName="lhSql", alias="lhemtmadrid")
 @udf.connection(argName="varLib", alias="varemtmadrid")
 @udf.function()
@@ -666,10 +1002,129 @@ def poll_arrives_scope(
     staleAfterSec: int = 900,
 ) -> str:
     """
-    Poll ALL catalogue scope stops (or stopIdsCsv override), emit bronze + silver + gold ETA patch.
-    Pipeline: call with batchOffset/batchLimit if invocation timeout (e.g. 50 stops per call).
+    Poll catalogue scope stops (Lakehouse catalogue — dual-run / rollback).
+    Pipeline: batchOffset/batchLimit if invocation timeout.
+    Cutover: switch Pipeline to poll_arrives_scope_eh.
     """
-    stops_all, cat_by_grain, grains_by_stop, label_at_stop, line_names, day_type, _cat_rows = _load_scope_and_catalogue(lhSql)
+    variables = _vl_all(varLib)
+    stops_all, cat_by_grain, grains_by_stop, label_at_stop, line_names, day_type, _cat_rows = (
+        _load_scope_and_catalogue(lhSql)
+    )
+    return _poll_arrives_core(
+        stops_all,
+        cat_by_grain,
+        grains_by_stop,
+        label_at_stop,
+        line_names,
+        day_type,
+        varLib,
+        stopIdsCsv,
+        batchOffset,
+        batchLimit,
+        clientId,
+        passKey,
+        staleAfterSec,
+        variables=variables,
+    )
+
+
+@udf.connection(argName="lhSql", alias="lhemtmadrid")
+@udf.connection(argName="varLib", alias="varemtmadrid")
+@udf.function()
+def poll_alerts_scope(lhSql: fn.FabricLakehouseClient, varLib: fn.FabricVariablesClient) -> str:
+    """Fetch servicealerts; known lines from Lakehouse catalogue (dual-run)."""
+    variables = _vl_all(varLib)
+    _stops, _c, _g, _l, line_names, _dt, _rows = _load_scope_and_catalogue(lhSql)
+    known = set(line_names.keys())
+    return _poll_alerts_core(known, variables=variables)
+
+
+@udf.connection(argName="varLib", alias="varemtmadrid")
+@udf.function()
+def poll_alerts_scope_eh(varLib: fn.FabricVariablesClient) -> str:
+    """Fetch servicealerts; known lines from Eventhouse seed catalogue (Kusto REST)."""
+    variables = _vl_all(varLib)
+    _stops, _c, _g, _l, line_names, _dt, _rows = _load_scope_and_catalogue_eh(varLib, variables)
+    known = set(line_names.keys())
+    return _poll_alerts_core(known, variables=variables)
+
+
+def _poll_alerts_core(known: set, variables: dict = None) -> str:
+    es = _es_cfg(variables)
+    resp = requests.get(SERVICEALERTS_URL, headers={"Accept": "application/x-protobuf"}, timeout=60)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"servicealerts HTTP {resp.status_code}")
+    payload = decode_feed_to_dict(resp.content)
+    ingested_at = _utc_now()
+    bronze = _bronze("MDB_GTFS_RT", "servicealerts", "proto", resp.status_code, payload)
+    silver = _expand_alerts(payload, known, ingested_at)
+    n_b = _send(es["alerts_bronze_conn"], es["alerts_bronze_hub"], [bronze])
+    n_s = _send(es["alerts_silver_conn"], es["alerts_silver_hub"], silver)
+    return f"alerts bronze={n_b} silver_rows={n_s} entities={len(payload.get('entity') or [])} known_lines={len(known)}"
+
+
+@udf.connection(argName="varLib", alias="varemtmadrid")
+@udf.function()
+def poll_arrives_scope_eh(
+    varLib: fn.FabricVariablesClient,
+    stopIdsCsv: str = "",
+    batchOffset: int = 0,
+    batchLimit: int = 0,
+    clientId: str = "",
+    passKey: str = "",
+    staleAfterSec: int = 900,
+    budgetSec: int = 0,
+) -> str:
+    """
+    Same as poll_arrives_scope but catalogue from Eventhouse via Kusto REST.
+    Test UI is silent until return — use batchLimit=1 or budgetSec=90, or run diag_eh_ready first.
+    """
+    t0 = time.time()
+    variables = _vl_all_bounded(varLib, 25.0)
+    t_vl = int((time.time() - t0) * 1000)
+    stops_all, cat_by_grain, grains_by_stop, label_at_stop, line_names, day_type, _cat_rows = (
+        _load_scope_and_catalogue_eh(varLib, variables)
+    )
+    t_cat = int((time.time() - t0) * 1000)
+    out = _poll_arrives_core(
+        stops_all,
+        cat_by_grain,
+        grains_by_stop,
+        label_at_stop,
+        line_names,
+        day_type,
+        varLib,
+        stopIdsCsv,
+        batchOffset,
+        batchLimit,
+        clientId,
+        passKey,
+        staleAfterSec,
+        variables=variables,
+        budget_sec=budgetSec,
+        t0=t0,
+    )
+    return f"{out} t_vl_ms={t_vl} t_cat_ms={t_cat} t_total_ms={int((time.time() - t0) * 1000)}"
+
+
+def _poll_arrives_core(
+    stops_all,
+    cat_by_grain,
+    grains_by_stop,
+    label_at_stop,
+    line_names,
+    day_type,
+    varLib,
+    stopIdsCsv,
+    batchOffset,
+    batchLimit,
+    clientId,
+    passKey,
+    staleAfterSec,
+    variables=None,
+    budget_sec: int = 0,
+    t0: float = None,
+) -> str:
     if (stopIdsCsv or "").strip():
         stops_all = [s.strip() for s in stopIdsCsv.split(",") if s.strip()]
     offset = max(0, int(batchOffset or 0))
@@ -678,21 +1133,28 @@ def poll_arrives_scope(
     if not stops:
         return f"no stops in batch offset={offset} total_scope={len(stops_all)}"
 
-    cid, pk = _creds(varLib, clientId, passKey)
+    cid, pk = _creds(varLib, clientId, passKey, variables=variables)
+    es = _es_cfg(variables)
     token = _login(cid, pk)
     bronze_events, silver_events = [], []
     fail_details: list = []
     ingested_at = _utc_now()
+    budget = int(budget_sec or 0)
+    started = t0 if t0 is not None else time.time()
+    budget_hit = False
+    polled = 0
     for sid in stops:
+        if budget > 0 and (time.time() - started) >= budget:
+            budget_hit = True
+            break
         body, status, err, sid_norm = _fetch_arrives(token, sid)
         api_code = str((body or {}).get("code", "")) if body else ""
-        # Token / auth API codes → refresh once and retry
         if api_code in AUTH_API_CODES or status == 401 or err == "http_401_token":
             token = _login(cid, pk)
             body, status, err, sid_norm = _fetch_arrives(token, sid)
             api_code = str((body or {}).get("code", "")) if body else ""
-        # EMT: 00 = OK with data; 01 = OK but no estimations (still a valid poll → bronze)
         ok_codes = frozenset({"00", "01"})
+        polled += 1
         if body is None or api_code not in ok_codes:
             desc = ""
             if body and isinstance(body, dict):
@@ -711,7 +1173,6 @@ def poll_arrives_scope(
             api_description=body.get("description"),
         )
         bronze_events.append(br)
-        # Silver expand: empty Arrive[] still seeds catalogue grains for that stop
         silver_events.extend(
             _expand_arrives(
                 body,
@@ -725,48 +1186,73 @@ def poll_arrives_scope(
             )
         )
 
-    n_b = _send(ARRIVES_BRONZE_CONN, ARRIVES_BRONZE_HUB, bronze_events)
-    n_s = _send(
-        ARRIVES_SILVER_CONN or ARRIVES_BRONZE_CONN,
-        ARRIVES_SILVER_HUB or ARRIVES_BRONZE_HUB,
-        silver_events,
-    )
+    n_b = _send(es["arrives_bronze_conn"], es["arrives_bronze_hub"], bronze_events)
+    n_s = _send(es["arrives_silver_conn"], es["arrives_silver_hub"], silver_events)
     gold_rows = _gold_eta_from_facts(silver_events, staleAfterSec or STALE_AFTER_SEC_DEFAULT)
     n_g = 0
-    if (GOLD_PATCH_CONN or "").strip():
-        n_g = _send(GOLD_PATCH_CONN, GOLD_PATCH_HUB, gold_rows)
+    gold_conn = es["gold_patch_conn"]
+    if (gold_conn or "").strip():
+        n_g = _send(gold_conn, es["gold_patch_hub"], gold_rows)
     fail_preview = " | ".join(fail_details[:5])
     if len(fail_details) > 5:
         fail_preview += f" …(+{len(fail_details) - 5})"
     return (
-        f"scope_total={len(stops_all)} batch={len(stops)} offset={offset} "
+        f"scope_total={len(stops_all)} batch={len(stops)} polled={polled} offset={offset} "
         f"bronze={n_b} silver={n_s} "
-        f"gold_patches={n_g if (GOLD_PATCH_CONN or '').strip() else len(gold_rows)}(local) "
+        f"gold_patches={n_g if (gold_conn or '').strip() else len(gold_rows)}(local) "
         f"fails={len(fail_details)}"
+        + (f" budget_hit={int(budget_hit)}" if budget > 0 else "")
         + (f" detail=[{fail_preview}]" if fail_details else "")
     )
 
 
 @udf.connection(argName="lhSql", alias="lhemtmadrid")
+@udf.connection(argName="varLib", alias="varemtmadrid")
 @udf.function()
-def poll_alerts_scope(lhSql: fn.FabricLakehouseClient) -> str:
-    """Fetch servicealerts, decode protobuf, emit bronze + silver_alerts snapshot rows."""
-    conn = _connect_sql(lhSql)
-    cur = conn.cursor()
-    cur.execute(
-        f"SELECT DISTINCT line_id FROM {_sql_table('silver_arrives')} WHERE line_id IS NOT NULL"
-    )
-    known = {str(r[0]).strip() for r in cur.fetchall() if r[0]}
-    cur.close()
-    conn.close()
-
-    resp = requests.get(SERVICEALERTS_URL, headers={"Accept": "application/x-protobuf"}, timeout=60)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"servicealerts HTTP {resp.status_code}")
-    payload = decode_feed_to_dict(resp.content)
-    ingested_at = _utc_now()
-    bronze = _bronze("MDB_GTFS_RT", "servicealerts", "proto", resp.status_code, payload)
-    silver = _expand_alerts(payload, known, ingested_at)
-    n_b = _send(ALERTS_BRONZE_CONN or ARRIVES_BRONZE_CONN, ALERTS_BRONZE_HUB, [bronze])
-    n_s = _send(ALERTS_SILVER_CONN or ALERTS_BRONZE_CONN or ARRIVES_BRONZE_CONN, ALERTS_SILVER_HUB, silver)
-    return f"alerts bronze={n_b} silver_rows={n_s} entities={len(payload.get('entity') or [])} known_lines={len(known)}"
+def emit_seed_smoke_from_lh(
+    lhSql: fn.FabricLakehouseClient,
+    varLib: fn.FabricVariablesClient,
+    maxRows: int = 1,
+) -> str:
+    """
+    Step C / smoke: copy up to maxRows Lakehouse catalogue grains as silver_arrives_seed
+    → es_emt_arrives_silver. Does not run full GTFS bootstrap (use nb_bootstrap_eh_silver for that).
+    """
+    variables = _vl_all(varLib)
+    es = _es_cfg(variables)
+    stops_all, cat_by_grain, _g, _l, _ln, day_type, rows = _load_scope_and_catalogue(lhSql)
+    n = max(1, int(maxRows or 1))
+    now_z = _utc_now_z()
+    now = _utc_now()
+    events = []
+    for r in rows[:n]:
+        sid, lid, did = str(r["stop_id"]), str(r["line_id"]), int(r["direction_id"])
+        events.append(
+            {
+                "emt_record": "silver_arrives_seed",
+                "_rk": _sha_rk(sid, lid, did, None, now),
+                "stop_id": sid,
+                "line_id": lid,
+                "line_label": str(r.get("line_label") or lid),
+                "direction_id": did,
+                "bus_id": None,
+                "destination": None,
+                "eta_seconds": None,
+                "bus_lat": None,
+                "bus_lon": None,
+                "datetime_polling": now_z,
+                "ingested_at": now_z,
+                "stop_name": r.get("stop_name"),
+                "stop_lat": float(r["stop_lat"]) if r.get("stop_lat") is not None else None,
+                "stop_lon": float(r["stop_lon"]) if r.get("stop_lon") is not None else None,
+                "direction_text": r.get("direction_text"),
+                "name_a": r.get("name_a"),
+                "name_b": r.get("name_b"),
+                "is_terminus": bool(r.get("is_terminus")),
+                "catalog_loaded_at": str(r.get("catalog_loaded_at") or now_z),
+                "day_type": str(r.get("day_type") or day_type or "LA"),
+                "map_ok": True,
+            }
+        )
+    n_s = _send(es["arrives_silver_conn"], es["arrives_silver_hub"], events)
+    return f"emit_seed_smoke_from_lh sent={n_s} scope_stops={len(stops_all)} sample_stop={events[0]['stop_id']}"

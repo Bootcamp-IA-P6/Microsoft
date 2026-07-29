@@ -3,6 +3,10 @@
 // Preferred: UDF emits emt_record=silver_arrives → Eventstream → this table
 // (Python expand = Lakehouse arrives_transform parity)
 // bus_lat/bus_lon: Arrive[].geometry GeoJSON Point coordinates [lon, lat]
+//
+// emt_record values on this table:
+//   silver_arrives      — poll / empty-poll facts (hot path)
+//   silver_arrives_seed — catalogue bootstrap (Phase 5; same columns, no bus/eta)
 // =============================================================================
 
 .create-merge table silver_arrives (
@@ -61,3 +65,17 @@
 // Optional dedupe retention helper (run periodically):
 // .set-or-replace silver_arrives_dedup <|
 //   silver_arrives | summarize arg_max(ingested_at, *) by _rk
+
+// Phase 5 — latest catalogue snapshot (bootstrap seeds only). Used by UDF scope later.
+.create-or-alter function with (folder = "emt") silver_arrives_catalogue_latest() {
+    let max_cat = toscalar(
+        silver_arrives
+        | where emt_record == "silver_arrives_seed" and map_ok == true and isnotnull(direction_id)
+        | summarize max(catalog_loaded_at)
+    );
+    silver_arrives
+    | where emt_record == "silver_arrives_seed"
+        and map_ok == true
+        and isnotnull(direction_id)
+        and catalog_loaded_at == max_cat
+}

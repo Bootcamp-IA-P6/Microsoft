@@ -47,14 +47,18 @@
 
 // --- Arrives gold stage (ETA + map coords) — run on schedule / after silver ingest ---
 // Stale: 900s matches Lakehouse notebook default (contract ADR-028 = 180; align at cutover)
+// Phase 5: exclude catalogue seeds (emt_record=silver_arrives_seed) from "latest poll"
+// so morning bootstrap cannot wipe ETA. null/"" emt_record = legacy poll (still included).
 .create-or-alter function with (folder = "emt") gold_arrives_stage(stale_after_sec: long = 900) {
-    let latest_poll =
+    let polls =
         silver_arrives
         | where map_ok == true and isnotnull(direction_id)
+        | where coalesce(emt_record, "") != "silver_arrives_seed";
+    let latest_poll =
+        polls
         | summarize max_poll = max(datetime_polling) by stop_id, line_id, direction_id;
     let facts =
-        silver_arrives
-        | where map_ok == true and isnotnull(direction_id)
+        polls
         | lookup kind=inner latest_poll on stop_id, line_id, direction_id
         | where datetime_polling == max_poll;
     let ranked =

@@ -1,11 +1,20 @@
 # Contrato de Origen de Datos: Proyecto EMT Madrid
-**Versión:** 4.4
-**Fecha:** 2026-07-28
-**Estado:** Alineado con esquema medallion (Bronze 1 · Silver por dominio · Gold 1) — [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) enmendado, [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), coords de mapa [ADR-039](adr/ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md). Serving hot path: Eventhouse ([phase4-rti.md](./phase4-rti.md)).
+**Versión:** 4.5
+**Fecha:** 2026-07-29
+**Estado:** Alineado con esquema medallion (Bronze 1 · Silver por dominio · Gold 1) — [ADR-015](adr/ADR-015-medallion-physical-schema-one-bronze-one-silver-one-gold-tab.md) enmendado, [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), coords [ADR-039](adr/ADR-039-gold-exposes-stop-and-live-bus-coordinates-for-map.md), catálogo EH [ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md). Serving + catálogo SoT: Eventhouse ([phase4-rti.md](./phase4-rti.md)).
 
 ---
 
 ## 0. Qué cambió respecto a la revisión anterior
+
+### 4.4 → 4.5 (2026-07-29)
+
+| # | Antes (4.4) | Ahora (4.5) |
+|---|---|---|
+| 1 | Catálogo (scope/denorm) SoT = Lakehouse seeds; UDF leía LH SQL | Catálogo SoT = Eventhouse `silver_arrives` con `emt_record=silver_arrives_seed`; UDF lee vía **Kusto REST** + SPN ([ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md)) |
+| 2 | `emt_record` no figuraba en el contrato tabular | Valores: `bronze` · `silver_arrives` (poll) · **`silver_arrives_seed`** (catálogo) · `silver_alerts` · patches gold; Gold/freq **excluyen** seeds |
+| 3 | Bootstrap diario → LH; overlap con arrives no tipificado en contrato | Bootstrap → `es_emt_arrives_silver` (append `catalog_loaded_at`); **no** pausar arrives; LH bootstrap = rollback hasta cutover |
+| 4 | — | Secretos / SAS Eventstream en Variable Library; envío EH = `requests`+SAS (sin `azure.eventhub` obligatorio) |
 
 ### 4.3.1 → 4.4 (2026-07-28)
 
@@ -130,7 +139,7 @@ flowchart LR
   SAL --> G
 ```
 
-GTFS (S3) bootstrap → `silver_arrives` directamente (no entra en Bronze). Semantic / Data Agent leen Gold ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)).
+GTFS (S3) bootstrap → `silver_arrives` directamente (no entra en Bronze) — en cutover Phase 5: Eventhouse seeds `silver_arrives_seed` ([ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md), [ADR-017](adr/ADR-017-bronze-holds-rest-and-rt-payloads-only-gtfs-bootstraps-silve.md)). Semantic / Data Agent leen Gold ([ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md)).
 
 **Frecuencia de actualización**
 
@@ -148,16 +157,17 @@ GTFS (S3) bootstrap → `silver_arrives` directamente (no entra en Bronze). Sema
 
 ### Pipeline
 
-1. **1×/día:** atributos GTFS + S1 line stops → seed `silver_arrives` · `catalog_loaded_at`
-2. **1×/día:** S1 calendar → Bronze → Silver/Gold `day_type`
-3. **~60s:** S1 `arrives` → Bronze → append `silver_arrives` (`_rk`, resolve label, `destination`→`direction_id`) → MERGE Gold (ETA·stale·freq). **No** toca `alert_*`.
-4. **~300s:** S2 `.pb` → JSON → Bronze → upsert `silver_alerts` → **misma ejecución** MERGE Gold `alert_*` por `line_id` (`alert_active` con `now`)
+1. **1×/día:** atributos GTFS + S1 line stops → seed `silver_arrives` con **`emt_record=silver_arrives_seed`** · `catalog_loaded_at` (SoT cutover: Eventhouse vía `es_emt_arrives_silver`; LH = rollback) ([ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md))
+2. **1×/día:** S1 calendar → Bronze → Silver/Gold `day_type` (LH path / audit; day_type también en seed/poll)
+3. **~60s:** S1 `arrives` → Bronze → append `silver_arrives` (`emt_record=silver_arrives`, `_rk`, resolve label, `destination`→`direction_id`) → Gold (ETA·stale·freq). **No** toca `alert_*`. Catálogo leído de seeds EH (`max(catalog_loaded_at)`).
+4. **~300s:** S2 `.pb` → JSON → Bronze → upsert `silver_alerts` → MERGE Gold `alert_*` por `line_id` (`alert_active` con `now`)
+5. **Concurrencia:** arrives 24/7 **no se pausa** durante bootstrap; Gold/freq excluyen `silver_arrives_seed` antes de `max(datetime_polling)`.
 
 ---
 
 ## 5. Diagrama del esquema físico completo
 
-Cuatro tablas Delta de dominio (`lh_emt_madrid`). Relaciones lógicas de pipeline (no FK físicas obligatorias). Detalle: §6–§8.
+Mismos **nombres y grains** en Lakehouse (`lh_emt_madrid`, rollback) y Eventhouse (`eh_emt_madrid` / `db_emt`, SoT hot path + catálogo tras Phase 5). Relaciones lógicas de pipeline (no FK físicas obligatorias). Detalle: §6–§8.
 
 ```mermaid
 erDiagram
@@ -177,6 +187,7 @@ erDiagram
 
   silver_arrives {
     string _rk PK
+    string emt_record
     string stop_id
     string line_id
     string line_label
@@ -311,11 +322,11 @@ Sin `Text_LineInfoRequired_YN` (no está en el esquema oficial). Con Incidences=
 
 ### 7.1 `silver_arrives` (ex `silver_emt`)
 
-([ADR-016](adr/ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-019](adr/ADR-019-direction-grain-key-is-direction-id-only.md), [ADR-020](adr/ADR-020-stop-id-stored-as-string-for-stability-and-portability.md), [ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md))
+([ADR-016](adr/ADR-016-silver-is-append-only-poll-fact-wide-rows-not-polymorphic-re.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md), [ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md), [ADR-019](adr/ADR-019-direction-grain-key-is-direction-id-only.md), [ADR-020](adr/ADR-020-stop-id-stored-as-string-for-stability-and-portability.md), [ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md))
 
-**Propósito:** fact de historial de polls. Material de frecuencia observada. Fuera del alcance del Data Agent. **Sin** columnas alert.
+**Propósito:** fact de historial de polls **y** filas de catálogo (seed) en la misma tabla física. Material de frecuencia observada = solo polls. Fuera del alcance del Data Agent. **Sin** columnas alert.
 
-**Grain / PK:** una fila = 1 poll de `(stop_id, line_id, direction_id)` in-scope (con o sin bus).
+**Grain / PK:** poll = 1 fila `(stop_id, line_id, direction_id)` in-scope (con o sin bus). Seed catálogo = 1 fila por el mismo grain con bus/eta/destination NULL y `emt_record=silver_arrives_seed`.
 
 ```text
 _rk = SHA256(
@@ -326,6 +337,7 @@ _rk = SHA256(
 | column | data type | Origen / derivado | Regla NULL |
 |--------|-----------|-------------------|------------|
 | `_rk` | string | PK | NOT NULL |
+| `emt_record` | string | Discriminador de ruta | `silver_arrives` (poll) · `silver_arrives_seed` (catálogo); ver [ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md) |
 | `stop_id` | string | S3/S1 | NOT NULL |
 | `line_id` | string | ID interno resuelto | NOT NULL |
 | `line_label` | string | Arrive `line` / maestro | NOT NULL |
@@ -357,14 +369,16 @@ _rk = SHA256(
 
 #### Reglas de `silver_arrives`
 
-1. **Seed:** insertar `(stop_id, line_id, direction_id)` in-scope. Conjunto de paso = alineado con **S1 line stops SoT**. path `1` → `direction_id=0`, path `2` → `direction_id=1` (**obligatorio**). Nombre·coords pueden denormalizarse desde GTFS ([ADR-009](adr/ADR-009-served-stop-sot-is-s1-line-stops-path-not-gtfs-alone.md)).
-2. **Sin paso:** no hay combinación → no hay fila Gold.
-3. **Poll without bus:** cargar fila con `bus_id` NULL.
-4. **Poll with bus:** 1 fila por vehículo (`bus_id` en `_rk`). En la práctica, máx. **2 buses** por mismo stop×label. Arrive no trae direction → **`destination` ≈ `name_b` → `direction_id=0`**, **`≈ name_a` → `1`**. Si falla el match, prohibido actualizar a ciegas ambas direcciones en Gold ([ADR-026](adr/ADR-026-map-arrive-destination-to-direction-id-require-path-mapping-.md)). Extraer `bus_lat`/`bus_lon` de `geometry`; no invertir lon/lat.
-5. **Fallo de resolve de label:** `map_ok=false` — excluido del MERGE a Gold ([ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md)).
-6. **`deviation` / `positionTypeBus` / `isHead`:** siguen **unused** ([ADR-003](adr/ADR-003-arrive-field-policy-unused-no-apply-fields-and-undefined-dev.md)); solo se usa `geometry` para coords de bus.
+1. **Seed (catálogo):** insertar `(stop_id, line_id, direction_id)` in-scope con **`emt_record=silver_arrives_seed`**, `bus_id`/`eta_seconds`/`destination` NULL, `catalog_loaded_at` = día del run. Conjunto de paso = **S1 line stops SoT**. path `1` → `direction_id=0`, path `2` → `direction_id=1` (**obligatorio**). Denorm nombre·coords desde GTFS ([ADR-009](adr/ADR-009-served-stop-sot-is-s1-line-stops-path-not-gtfs-alone.md)). SoT cutover: Eventhouse vía `es_emt_arrives_silver`; **no** DELETE masivo de filas null-shaped en EH ([ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md)).
+2. **Lectura de catálogo / scope:** solo seeds + `catalog_loaded_at == max(catalog_loaded_at)` (+ `map_ok`). Polls no sustituyen el catálogo.
+3. **Sin paso:** no hay combinación → no hay fila Gold.
+4. **Poll without bus:** fila con `emt_record=silver_arrives`, `bus_id` NULL (heartbeat; **no** es seed).
+5. **Poll with bus:** 1 fila por vehículo (`bus_id` en `_rk`), `emt_record=silver_arrives`. En la práctica, máx. **2 buses** por mismo stop×label. Arrive no trae direction → **`destination` ≈ `name_b` → `direction_id=0`**, **`≈ name_a` → `1`**. Si falla el match, prohibido actualizar a ciegas ambas direcciones en Gold ([ADR-026](adr/ADR-026-map-arrive-destination-to-direction-id-require-path-mapping-.md)). Extraer `bus_lat`/`bus_lon` de `geometry`; no invertir lon/lat.
+6. **Fallo de resolve de label:** `map_ok=false` — excluido del MERGE a Gold ([ADR-021](adr/ADR-021-line-id-vs-line-label-and-failed-arrive-label-resolution-exc.md)).
+7. **Gold / freq:** excluir `emt_record == silver_arrives_seed` antes de latest poll / observaciones de headway.
+8. **`deviation` / `positionTypeBus` / `isHead`:** siguen **unused** ([ADR-003](adr/ADR-003-arrive-field-policy-unused-no-apply-fields-and-undefined-dev.md)); solo se usa `geometry` para coords de bus.
 
-**Deduplicación:** append-only, `_rk` idempotente.
+**Deduplicación:** append-only, `_rk` idempotente (seeds y polls usan espacios de `_rk` distintos).
 
 **Nota:** denormalización a propósito (nombre, coords, etc. por fila). Con ~52 paradas el volumen es chico; cero joins para servir Gold/agente pesa más que el almacenamiento en PoC.
 
@@ -524,9 +538,10 @@ El body de `arrives` permanece con `Text_IncidencesRequired_YN=N` (ver §6); ETA
 
 ---
 
-## 12. Pendientes reales antes de implementar
+## 12. Pendientes reales (ops / validación)
 
 - [ ] Validar el umbral de 20 observaciones para `freq_observed_*` con los primeros días de datos reales ([ADR-030](adr/ADR-030-frequency-response-gate-20-observations-preferred-24h-warmup.md))
 - [ ] Reportar intervalo real de arrives en producción (ideal 60s) ([ADR-029](adr/ADR-029-polling-cadences-arrives-60s-try-and-adjust-rt-300s.md))
 - [ ] Definir KPIs con el stakeholder (fuera del esquema físico — [ADR-031](adr/ADR-031-semantic-model-kpi-and-quality-logs-stay-outside-emt-domain-.md))
 - [ ] Almacenamiento Azure · región: **UNVERIFIED**
+- [ ] Phase 5 Fabric cutover restante: pipeline `poll_*_scope_eh`, `pl_emt_bootstrap_daily` sin `%pip`, parar schedule LH bootstrap tras confianza ([phase4-rti.md](./phase4-rti.md) Steps E–G, [ADR-040](adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md))

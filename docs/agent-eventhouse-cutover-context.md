@@ -18,27 +18,31 @@ No hace falta comparar Lakehouse gold vs Eventhouse gold antes de trabajar: silv
 
 ## Arquitectura actual
 
+> **Phase 5 (en curso):** el catálogo pasa de Lakehouse a seeds en Eventhouse  
+> (`emt_record=silver_arrives_seed` vía `es_emt_arrives_silver`). Guía: [phase4-rti.md](./phase4-rti.md) Steps A–G.  
+> Hasta Step E, la UDF puede seguir leyendo LH; después `poll_*_scope_eh` + SQL endpoint.
+
 ```text
-[1×/día]  Notebook bootstrap GTFS → Lakehouse silver_arrives (catálogo + stop_lat/lon)
-                 ↑
-          La UDF solo LEE el catálogo / scope vía SQL del Lakehouse
+[1×/día]  nb_bootstrap_eh_silver → es_emt_arrives_silver → silver_arrives (seed)
+          (rollback: nb_bootstrap_gtfs_silver → Lakehouse silver_arrives)
 
 [Hot path]
-  UDF (login EMT + arrives / servicealerts)
-    → Eventstream 
+  UDF poll_*_scope[_eh] (login EMT + arrives / servicealerts)
+    → Eventstream
     → Eventhouse:
          bronze_emt_raw
-         silver_arrives   (+ bus_lat/bus_lon desde Arrive.geometry)
+         silver_arrives   (+ bus_lat/bus_lon desde Arrive.geometry; seeds tagged)
          silver_alerts
-    → KQL apply gold
+    → KQL apply gold (excluye silver_arrives_seed)
          gold_emt_stop_line   ← SoT para Agent / Semantic / mapa
 ```
 
 | Componente | Dónde | Ubicación |
 |------------|--------|----------|
-| Bootstrap GTFS | Lakehouse (pipeline + notebook), ~09:00 | base/nb_bootstrap_gtfs_silver_0 |
-| Lectura de catálogo / scope | Lakehouse (`silver_arrives`) — solo la UDF | ./lh_emt_madrid |
-| Ingesta arrives / alerts | UDF → Eventstream → Eventhouse | phase4/udf_emt_ingest <br>phase4/es_emt_* <br>phase4/eh_emt_madrid/db_emt |
+| Bootstrap GTFS (Phase 5) | Notebook → Eventstream silver | `nb_bootstrap_eh_silver` |
+| Bootstrap GTFS (rollback) | Lakehouse notebook | `nb_bootstrap_gtfs_silver` |
+| Lectura de catálogo / scope | EH Kusto REST tras Step E; LH dual-run antes | `poll_*_scope_eh` / `poll_*_scope` |
+| Ingesta arrives / alerts | UDF → Eventstream → Eventhouse | `udf-emt-ingest` · `es_emt_*` · `eh_emt_madrid`/`db_emt` |
 | Serving Agent / Semantic / mapa | **Eventhouse `gold_emt_stop_line`** | |
 | Rollback (path antiguo) | Lakehouse — no es SoT del Agent | |
 

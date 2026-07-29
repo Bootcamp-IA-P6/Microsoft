@@ -1,6 +1,6 @@
 # EMT Madrid Fabric Refactoring Roadmap
 
-**Updated:** 2026-07-23 — aligned with contract **v4.3** ([data-source-contract-v4.md](./data-source-contract-v4.md), [ADR-037](adr/ADR-037-silver-split-into-silver-arrives-and-silver-alerts.md))
+**Updated:** 2026-07-29 — contract **v4.5** ([ADR-040](./adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md)); Phase 5 EH catalogue
 
 ## Objective
 
@@ -13,17 +13,18 @@ Instead of rewriting the project, evolve it incrementally through independent ph
 # Design Principles
 
 - Keep the medallion roles: **Bronze → Silver (by domain) → Gold**.
-- Physical domain tables (contract v4.3):
+- Physical domain tables (contract v4.5):
   - `bronze_emt_raw`
   - `silver_arrives` (poll history + catalogue seed; ex `silver_emt`)
   - `silver_alerts` (S2 servicealerts, latest-only)
   - `gold_emt_stop_line` (Agent serving; `alert_*` columns unchanged)
-- Keep the **Lakehouse** as the storage layer through Phase 0–3 (Phase 4 may add Eventhouse).
+- Keep the **Lakehouse** as the storage layer through Phase 0–3 (Phase 4 adds Eventhouse hot path; Phase 5 removes LH as catalogue SoT).
 - Preserve functionality after every phase.
 - Separate business logic from execution engine.
 - Maximize code reuse.
 - Replace infrastructure gradually instead of rewriting everything.
 - **Arrives jobs must not overwrite Gold `alert_*`.** Alerts are a separate path (contract §4 pipeline steps 3–4).
+- **Daily catalogue seed must not wipe live Gold ETA** when sharing `silver_arrives` (Phase 5).
 
 ---
 
@@ -312,24 +313,220 @@ arrives_normalize / frequency / latest  → KQL / Materialized Views
 alerts_normalize / alerts_project       → Dedicated KQL (or update policies)
 ```
 
-**Contract:** physical engine may change; Agent-facing grain and column meanings stay v4.3.1 unless a new ADR says otherwise. Freq = ADR-038.
+**Contract:** physical engine may change; Agent-facing grain and column meanings stay v4.4 unless a new ADR says otherwise. Freq = ADR-038.
+
+---
+
+# Phase 5 — Remove Lakehouse catalogue dependency
+
+**Decision record:** [ADR-040](./adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md) · contract **v4.5**
+
+## Goal
+
+Move daily GTFS + S1 line-stops **bootstrap SoT** from Lakehouse `silver_arrives` into Eventhouse **`silver_arrives` (same table — no separate catalogue table)**. UDF reads scope / denorm / `line_id` list from Eventhouse only. Lakehouse becomes optional rollback, not a hot-path dependency.
+
+## Why now (not Phase 4)
+
+- Phase 4 driver was Spark session cost on the **hot path**. Bootstrap stayed on Lakehouse on purpose (daily, heavy GTFS; little RTI cadence win) — see [phase4-rti.md](./phase4-rti.md) out of scope “Moving bootstrap into Eventhouse”.
+- Arrives wall-clock is already **≈80s+** per run; **60s cadence is not the Phase 5 success metric**.
+- Remaining structural debt: dual engine for catalogue (LH write + UDF LH SQL read). Phase 5 removes that.
+
+## Non-goals
+
+- Sub-60s arrives (batching / parallelism — separate track).
+- New physical table for catalogue (e.g. `silver_catalogue`). Prefer same `silver_arrives` grain as Lakehouse today.
+- Pausing arrives for bootstrap (impossible: arrives is 24/7; bootstrap ~06:00–09:00 always overlaps).
+- Merging daily bootstrap into the minute-cadence arrives/alerts **pipeline item** (keep a separate daily pipeline for failure isolation — overlap with arrives is expected).
+- Changing poll `emt_record` away from `"silver_arrives"` (poll path stays as-is).
+
+## Verified: how `emt_record` is used today (2026-07-29)
+
+Repo audit before implement:
+
+| Layer | Uses `emt_record`? |
+|-------|-------------------|
+| KQL `04` gold / `05` freq / `silver_alerts_latest` | **No** — never in `where`; gold uses `map_ok`, `datetime_polling`, `eta_*`; freq uses `bus_id` present |
+| KQL `01`–`03` | Column + JSON mapping `$.emt_record` only (passthrough) |
+| UDF `_send` | **No filter** — routes by **CONN** (`ARRIVES_BRONZE_*` / `ARRIVES_SILVER_*` / alerts twin), not by field value |
+| Lakehouse `bootstrap_impl` / `pipeline/` | **Field absent** |
+| Eventstream filter definitions | **Not in repo** — portal-owned |
+
+**Eventstreams (portal):** `es_emt_arrives`, `es_emt_arrives_silver`, `es_emt_alerts`, `es_emt_alerts_silver`.
+
+Implications for Phase 5:
+
+1. Adding `emt_record = "silver_arrives_seed"` does **not** break existing KQL consumers (they ignore the field).
+2. **Still must** add Gold exclude (**P5.2**) before seeds land — otherwise `max(datetime_polling)` treats seeds as latest polls.
+3. Portal: confirm `es_emt_arrives_silver` → `silver_arrives` has **no** hard filter `emt_record == "silver_arrives"` only; if it does, allow-list `"silver_arrives_seed"`. If no filter (schema mapping only), seed JSON with the same silver columns lands as-is.
+4. Seeds use **`es_emt_arrives_silver`** (same silver mapping as arrives polls). Do not send seeds to bronze or alerts streams.
+
+## Locked design decisions
+
+| Decision | Choice |
+|----------|--------|
+| Catalogue table | Same EH `silver_arrives` (no second table) |
+| Seed vs poll discriminator | **`emt_record = "silver_arrives_seed"`** for seeds only; polls keep **`"silver_arrives"`** |
+| Empty Arrive[] polls | Stay `"silver_arrives"` (heartbeat ≠ catalogue) |
+| EH seed refresh | Append new `catalog_loaded_at`; **no** broad DELETE of null-shaped rows |
+| Gold latest | Exclude `emt_record == "silver_arrives_seed"` (defense A; optional C) — **required even though no KQL uses the field today** |
+| Catalogue / scope read | Tagged seeds only + `max(catalog_loaded_at)` (defense B) |
+| Hot-path LH | Remove after cutover (`lhemtmadrid` / `LH_SQL_DB` gone from UDF) |
+| Bootstrap runner | Spark-free notebook `nb_bootstrap_eh_silver` + `bootstrap_seed` / `bootstrap_eh_impl`; daily Fabric Pipeline; send = **requests+SAS** |
+| UDF Event Hub send | **requests+SAS** (HTTP timeout); Variable Library for CONN / Query URI / SPN |
+| Seed ingest path | **`es_emt_arrives_silver`** (or KQL ingest) → table `silver_arrives`; never bronze / alerts ES |
+
+---
+
+## Implementation plan (ordered)
+
+### P5.0 — Preconditions (Phase 4 leftovers)
+
+Do not start catalogue cutover until these are true enough for dual-run:
+
+- [ ] EH `silver_arrives` / `silver_alerts` / `gold_emt_stop_line` receiving live data
+- [ ] Gold apply on a schedule (or reliable manual apply for smoke)
+- [x] Repo: KQL/UDF do not filter on `emt_record` (verified 2026-07-29)
+- [ ] Portal: inspect `es_emt_arrives_silver` → EH destination — note any `emt_record` filter; if present, plan allow-list for `silver_arrives_seed`
+
+### P5.1 — Contract of the seed row (docs + constants)
+
+- [x] Document allowed `emt_record` values: `bronze` · `silver_arrives` · **`silver_arrives_seed`** · `silver_alerts` · gold patches ([phase4-rti.md](./phase4-rti.md) §3)
+- [x] Seed grain unchanged: one row per in-scope `(stop_id, line_id, direction_id)` with `bus_id` / `eta_seconds` / `destination` null; denorm + `catalog_loaded_at` + `day_type` + `map_ok=true`
+- [x] `_rk` remains distinct from polls (`rti/lib/bootstrap_seed.py` + UDF `emit_seed_smoke_from_lh`)
+- [x] Touch: [phase4-rti.md](./phase4-rti.md) Steps C–G; [ADR-040](./adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md); contract v4.5
+
+### P5.2 — KQL defenses **before** writing seeds to EH
+
+Ship query rules first so accidental seed ingest cannot wipe ETA.
+
+- [x] `gold_arrives_stage`: `coalesce(emt_record,"") != "silver_arrives_seed"` before latest poll (`rti/kql/04`)
+- [x] `freq_by_line_adr038`: explicit seed exclude (`rti/kql/05`)
+- [x] `silver_arrives_catalogue_latest()` helper (`rti/kql/02`)
+- [ ] Fabric: paste `02` → `05` → `04`, gold apply, ETA smoke ([phase4-rti.md](./phase4-rti.md) Step A)
+- [ ] Optional: one hand seed row → confirm Gold ETA unchanged
+
+**Exit:** Gold safe under seed-shaped rows even if bootstrap is not live yet.
+
+### P5.3 — Eventstream / ingest path for seeds
+
+- [ ] Default path: **`es_emt_arrives_silver`** same JSON mapping as poll silver → `silver_arrives` (column set identical)
+- [ ] Alternate: KQL `.ingest` / queued ingest if ES batch size awkward for full morning seed
+- [ ] Portal allow-list if filtered; if unfiltered, no ES change beyond sending new events
+- [ ] Do **not** send seeds to `es_emt_arrives`, `es_emt_alerts`, or `es_emt_alerts_silver`
+- [ ] UDF poll path: leave `emt_record: "silver_arrives"` unchanged in `udf_emt_ingest` / `arrives_expand`
+
+**Exit:** A hand-sent seed JSON with `emt_record=silver_arrives_seed` appears in EH `silver_arrives`.
+
+### P5.4 — Bootstrap writer → EH
+
+Port Lakehouse `bootstrap_impl` behaviour without Spark-on-hot-path dependency:
+
+- [x] Reuse logic: GTFS zip → geofence → S1 line_stops / calendar / labels → seed dicts (`rti/lib/bootstrap_seed.py`; LH SoT still `bootstrap_impl.py` for rollback)
+- [x] Emit rows with **`emt_record: "silver_arrives_seed"`** + existing silver columns (`bus_lat`/`bus_lon` null OK)
+- [x] **No** LH-style `DELETE WHERE bus_id IS NULL AND …` on EH (documented + code)
+- [x] Notebook [`nb_bootstrap_eh_silver`](../notebooks/nb_bootstrap_eh_silver.py) + [`bootstrap_eh_impl`](../pipeline/orchestrator/bootstrap_eh_impl.py) (no Spark write to LH)
+- [ ] Fabric: upload Files/python + run notebook smoke then full (Step D) — **portal pending**
+- [ ] Bronze optional: line_stops/calendar raw can still go `bronze_emt_raw` via `es_emt_arrives` if useful for audit; GTFS zip still **not** Bronze ([ADR-017](adr/ADR-017-bronze-holds-rest-and-rt-payloads-only-gtfs-bootstraps-silve.md))
+
+**Exit:** Morning-sized seed batch lands in EH; `count where emt_record=="silver_arrives_seed"` ≈ in-scope grains; `catalog_loaded_at` = run day.
+
+### P5.5 — UDF catalogue read from Eventhouse
+
+- [x] Repo: `_load_scope_and_catalogue_eh` via **Kusto REST** (`EH_QUERY_URI` + SPN in Variable Library); functions `poll_arrives_scope_eh` / `poll_alerts_scope_eh` (LH variants kept for dual-run)
+- [x] Scope + denorm: **only** `emt_record == "silver_arrives_seed"` and `catalog_loaded_at == max(catalog_loaded_at)` (and `map_ok`)
+- [x] Dual-run: Pipeline stays on `poll_*_scope` until Step E; then switch to `*_eh` (LH connection optional for rollback)
+- [x] Mid-bootstrap: readers use `max(catalog_loaded_at)` — previous day until new batch completes; **do not** pause arrives ([phase4-rti.md](./phase4-rti.md) Step E)
+- [ ] Fabric: VL (`EH_QUERY_URI` + SPN + ES CONN) + UDF paste (`requests` only; no `azure-eventhub`/`azure-identity`) + Pipeline → `poll_*_scope_eh` — **portal in progress**
+
+**Exit:** Hot-path Pipeline calls `poll_*_scope_eh` with **no** Lakehouse catalogue read.
+
+### P5.6 — Daily Fabric Pipeline
+
+- [x] Guide: `pl_emt_bootstrap_daily` in [phase4-rti.md](./phase4-rti.md) Step F (schedule ~06:00–09:00 Madrid) — separate from arrives/alerts
+- [ ] Fabric: create pipeline Notebook → Wait → optional gold apply — **portal pending** (notebook: **no `%pip`**; Spark runtime `requests`)
+- [x] Arrives/alerts schedule **keeps running** through that window (documented Do-not #6)
+- [ ] Alerts on bootstrap failure (pager/email) — stale catalogue is worse than overlapping writers
+
+**Exit:** One unattended morning run while arrives is live; Gold ETA continuous; scope refreshes after seed visible.
+
+### P5.7 — Cutover & rollback
+
+- [x] Dual-run procedure documented ([phase4-rti.md](./phase4-rti.md) Steps E–G)
+- [ ] Stop LH `nb_bootstrap_gtfs_silver` schedule when EH seeds trusted — **portal pending**
+- [x] Rollback: re-enable LH bootstrap + `poll_*_scope`; Gold seed-exclude filters can stay (harmless)
+- [x] Update [phase4-rti.md](./phase4-rti.md) Steps A–G; [agent-eventhouse-cutover-context.md](./agent-eventhouse-cutover-context.md) topology note
+- [ ] [dfd-erd.md](./dfd-erd.md) topology refresh (optional polish)
+
+---
+
+## Status (checklist rollup)
+
+- [ ] P5.0 Phase 4 EH hot path ready; portal `es_emt_arrives_silver` filter check
+- [x] P5.0 repo audit: KQL/UDF ignore `emt_record` for logic
+- [x] P5.1 Seed `emt_record` contract documented ([ADR-040](./adr/ADR-040-eventhouse-catalogue-sot-seed-tag-and-kusto-udf-read.md), contract v4.5)
+- [ ] P5.2 KQL Gold/freq exclude `silver_arrives_seed` — **repo done**; Fabric paste + smoke pending
+- [x] P5.2 repo: `02` catalogue helper + `04`/`05` seed exclude
+- [ ] P5.3 `es_emt_arrives_silver` / ingest accepts seed tag into `silver_arrives` (Step B/C portal)
+- [x] P5.4 Bootstrap writer → EH **repo done**; Fabric Step D pending
+- [x] P5.5 UDF catalogue from EH **repo done**; Fabric Step E pending
+- [ ] P5.6 Daily bootstrap pipeline (guide ready; Fabric Step F pending)
+- [ ] P5.7 Cutover: stop LH schedule after dual-run trust (Step G)
+
+---
+
+## Target sketch
+
+```text
+Daily pl_emt_bootstrap_daily (~06–09 Europe/Madrid):
+  bootstrap → es_emt_arrives_silver (or KQL ingest)
+    → silver_arrives rows with emt_record=silver_arrives_seed
+
+Hot path (existing ES):
+  UDF reads catalogue FROM EH (seed tag + max catalog_loaded_at)
+    → es_emt_arrives / es_emt_arrives_silver
+    → es_emt_alerts / es_emt_alerts_silver
+  KQL gold build: latest excludes silver_arrives_seed
+  → gold_emt_stop_line → Agent / map
+```
+
+## Same table: override risk (summary)
+
+Unprotected seed append with `datetime_polling=now` can steal Gold `max(datetime_polling)` → ETA null until next poll. **Mitigation = P5.2 + tagged seeds (P5.1/P5.4), not schedule isolation.**
+
+Poll fact rows are **not** overwritten in place (different `_rk`). Concurrent arrives + bootstrap is the normal case.
+
+## Concurrent with 24/7 arrives
+
+| Pattern | Verdict |
+|---------|---------|
+| Pause arrives for bootstrap | **Rejected** — not operable |
+| Separate daily *pipeline item* | **Yes** — ops isolation only |
+| Tag + Gold exclude + catalogue max(date) | **Required** |
+| LH broad DELETE of null-shaped rows | **Do not port to EH**; fix LH rollback if still used |
+
+Mid-bootstrap: UDF may briefly see previous `catalog_loaded_at` until the new seed batch is fully queryable — acceptable.
 
 ---
 
 # Final Architecture (aspirational)
 
 ```text
-Fabric Pipeline
-  → User Data Function(s)     # S1 + S2 ingestion, separate cadences
-  → Eventstream
+Fabric Pipeline (arrives/alerts)     Fabric Pipeline (daily)
+  → UDF                                → bootstrap
+  → es_emt_arrives                     → es_emt_arrives_silver
+  → es_emt_arrives_silver                (emt_record=silver_arrives_seed)
+  → es_emt_alerts
+  → es_emt_alerts_silver
   → Eventhouse
-  → KQL / Materialized Views  # silver_arrives + silver_alerts domains
-  → Gold serving
+       bronze_emt_raw
+       silver_arrives   # polls + seeds (discriminated by emt_record)
+       silver_alerts
+       gold_emt_stop_line      # latest ignores seeds
   → (optional) Semantic Model
   → AI / Data Agent
 ```
 
-Lakehouse Phase 0–2 remains the rollback and Agent-proven path until Phase 4 is validated.
+Lakehouse remains rollback until Phase 4 Agent cutover **and** Phase 5 catalogue cutover are validated. After Phase 5, hot path needs **no** Lakehouse connection.
 
 ---
 
@@ -364,3 +561,13 @@ Lakehouse Phase 0–2 remains the rollback and Agent-proven path until Phase 4 i
 - Spark replaced (or bypassed) by Eventstream/Eventhouse for hot path
 - Minimal rewrite of domain logic
 - `silver_arrives` / `silver_alerts` semantics preserved
+
+## Phase 5
+
+- Catalogue SoT = EH `silver_arrives` seeds with `emt_record=silver_arrives_seed`
+- Poll path still emits `emt_record=silver_arrives` unchanged
+- UDF hot path runs **without** Lakehouse connection
+- Morning bootstrap safe while arrives runs 24/7 (no pause)
+- Gold ETA not cleared by seed append (KQL exclude verified **before** seed writer)
+- Daily `pl_emt_bootstrap_daily`; existing arrives/alerts schedule keeps running
+- LH daily bootstrap schedule stopped after cutover

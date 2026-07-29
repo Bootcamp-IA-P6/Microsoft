@@ -7,6 +7,8 @@
 .create-or-alter function with (folder = "emt") freq_by_line_adr038(freq_min: long = 20) {
     let polls =
         silver_arrives
+        // Phase 5: seeds have null bus_id anyway; exclude seed tag explicitly for clarity
+        | where coalesce(emt_record, "") != "silver_arrives_seed"
         | where isnotempty(bus_id) and map_ok == true and day_type in ("LA","SA","FE") and isnotnull(direction_id)
         | distinct stop_id, line_id, direction_id, bus_id, datetime_polling, day_type
         | extend window = iff(day_type == "LA", "weekday", "weekend");
