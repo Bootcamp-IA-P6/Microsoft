@@ -5,6 +5,10 @@ import type { Lang } from '@/i18n/translations';
 import MapLibreInlineWorker from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&inline';
 import { getStopIdByName } from '@/utils/stopNames';
 import { stopCoordinates } from '@/utils/geoData';
+import { getRouteShape } from '@/utils/routeShapes';
+import { getLineColor } from '@/utils/lineColors';
+import { getLinesForStop } from '@/utils/stopLines';
+import { goldStops, stopById } from '@/utils/stopsFromGold';
 
 const __OriginalWorker = globalThis.Worker;
 const __PatchedWorker = function (this: Worker, url: string | URL, options?: WorkerOptions): Worker {
@@ -50,7 +54,12 @@ function createMarkerEl(isHighlighted = false): HTMLElement {
 
 function createStopPopupContent(stopName: string, _stopCoordinates: [number, number]): HTMLElement {
   const stopId = getStopIdByName(stopName);
+  return createStopPopupContentById(stopId || '', stopName, _stopCoordinates);
+}
+
+function createStopPopupContentById(stopId: string, stopName: string, _stopCoordinates: [number, number]): HTMLElement {
   const displayName = stopId ? `${stopName} (${stopId})` : stopName;
+  const lines = stopId ? getLinesForStop(stopId) : [];
 
   const container = document.createElement('div');
   container.className = 'map-popup';
@@ -60,17 +69,40 @@ function createStopPopupContent(stopName: string, _stopCoordinates: [number, num
   nameEl.textContent = displayName;
   container.appendChild(nameEl);
 
+  // Mostrar badges de líneas que pasan por esta parada
+  if (lines.length > 0) {
+    const linesRow = document.createElement('div');
+    linesRow.className = 'map-popup__lines';
+    for (const line of lines) {
+      const color = getLineColor(line);
+      const badge = document.createElement('span');
+      badge.className = 'map-popup__line-badge';
+      badge.style.background = color.bg;
+      badge.style.color = color.fg;
+      badge.textContent = line;
+      linesRow.appendChild(badge);
+    }
+    container.appendChild(linesRow);
+  }
+
   const btn = document.createElement('button');
   btn.className = 'map-popup__btn';
   btn.textContent = 'Ver horarios';
   btn.addEventListener('click', () => {
-    const question = `¿Qué buses llegan ahora a ${stopName}?`;
+    const question = stopId
+      ? `¿Qué buses llegan ahora a la parada ${stopId}?`
+      : `¿Qué buses llegan ahora a ${stopName}?`;
     window.dispatchEvent(new CustomEvent('chat:ask', { detail: { question } }));
     window.dispatchEvent(new CustomEvent('nav:changeView', { detail: { view: 'split' } }));
   });
   container.appendChild(btn);
 
   return container;
+}
+
+function findStopByCoords(coords: [number, number]) {
+  // Buscar la parada exacta por coordenadas (lon, lat)
+  return goldStops.find(s => s.lon === coords[0] && s.lat === coords[1]) || null;
 }
 
 export default function Map({ className = '', flyTarget, isMapVisible }: MapProps) {
@@ -80,6 +112,8 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const stopMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const routeLayerId = useRef<string>('navi-route-line');
+  const routeSourceId = useRef<string>('navi-route-source');
 
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return;
@@ -242,15 +276,15 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
     stopMarkersRef.current.forEach((m) => m.remove());
     stopMarkersRef.current = [];
 
-    for (const [name, coords] of Object.entries(stopCoordinates)) {
+    for (const stop of goldStops) {
+      const coords: [number, number] = [stop.lon, stop.lat];
       const el = createMarkerEl(false);
-      el.title = name.charAt(0) + name.slice(1).toLowerCase();
+      const displayName = stop.stop_name;
+      el.title = displayName;
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat(coords)
         .addTo(map);
-
-      const displayName = name.charAt(0) + name.slice(1).toLowerCase();
 
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -258,7 +292,7 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
 
         const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
           .setLngLat(coords)
-          .setDOMContent(createStopPopupContent(displayName, coords))
+          .setDOMContent(createStopPopupContentById(stop.stop_id, displayName, coords))
           .addTo(map);
         popupRef.current = popup;
 
@@ -298,7 +332,7 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
       const map = mapRef.current;
       if (!map) return;
 
-      const { stopCoordinates: stopCoords, stopName } = (e as CustomEvent).detail;
+      const { stopCoordinates: stopCoords, stopName, lineLabel } = (e as CustomEvent).detail;
       if (!stopCoords) return;
 
       markerRef.current?.remove();
@@ -316,6 +350,9 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
 
       attachPopupToMarker(marker, stopCoords, stopName || 'Parada');
 
+      // Dibujar la ruta de la línea si tenemos el shape
+      drawRouteLine(map, lineLabel);
+
       map.flyTo({
         center: stopCoords,
         zoom: 16.5,
@@ -328,6 +365,43 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
     window.addEventListener('map:showRoute', handler);
     return () => window.removeEventListener('map:showRoute', handler);
   }, []);
+
+  function drawRouteLine(map: maplibregl.Map, lineLabel?: string) {
+    // Limpiar ruta anterior
+    if (map.getLayer(routeLayerId.current)) {
+      map.removeLayer(routeLayerId.current);
+    }
+    if (map.getSource(routeSourceId.current)) {
+      map.removeSource(routeSourceId.current);
+    }
+
+    if (!lineLabel) return;
+
+    const shape = getRouteShape(lineLabel, 0);
+    if (!shape) return;
+
+    const color = getLineColor(lineLabel);
+
+    map.addSource(routeSourceId.current, {
+      type: 'geojson',
+      data: shape,
+    });
+
+    map.addLayer({
+      id: routeLayerId.current,
+      type: 'line',
+      source: routeSourceId.current,
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round',
+      },
+      paint: {
+        'line-color': color.bg,
+        'line-width': 4,
+        'line-opacity': 0.8,
+      },
+    });
+  }
 
   return (
     <div ref={wrapperRef} className={`relative map-wrapper ${className}`}>

@@ -5,7 +5,7 @@ import { askAgent, sendFeedbackToFabric } from '@/services/agentService';
 import type { ChatResponse, MapData } from '@/services/agentService';
 import { extractAllStops } from '@/services/parseStops';
 import { enrichStopQuery } from '@/utils/enrichQuery';
-import { getStopCoords, getRouteLineString } from '@/utils/geoData';
+import { getStopCoords } from '@/utils/geoData';
 import type { Lang } from '@/i18n/translations';
 import { t, speechLang } from '@/i18n/translations';
 
@@ -126,14 +126,9 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
       if (!resolvedMapData && response.chat_message.stop_id) {
         const stopCoords = getStopCoords(response.chat_message.stop_name || response.chat_message.stop_id);
         if (stopCoords) {
-          const routeGeoJSON = getRouteLineString(
-            response.chat_message.line_number || '',
-            stopCoords,
-          );
           resolvedMapData = {
             type: 'bus_stop_and_route',
             stop_coordinates: stopCoords,
-            route_geojson: routeGeoJSON ?? undefined,
           };
         }
       }
@@ -154,7 +149,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
           detail: {
             stopCoordinates: resolvedMapData.stop_coordinates,
             stopName: response.chat_message.stop_name || matchedStops?.[0] || '',
-            routeGeoJSON: resolvedMapData.route_geojson,
+            lineLabel: response.chat_message.line_number || '',
           },
         }));
       }

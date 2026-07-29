@@ -9,7 +9,6 @@ export interface ChatMessageData {
 export interface MapData {
   type: 'bus_stop_and_route';
   stop_coordinates?: [number, number];
-  route_geojson?: GeoJSON.Feature<GeoJSON.LineString>;
 }
 
 export interface ChatResponse {

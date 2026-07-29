@@ -93,8 +93,8 @@ export default function ChatMessage({ messageId, role, text, matchedStops, times
                 window.dispatchEvent(new CustomEvent('map:showRoute', {
                   detail: {
                     stopCoordinates: mapData.stop_coordinates,
-                    stopName: '',
-                    routeGeoJSON: mapData.route_geojson,
+                    stopName: matchedStops?.[0] || '',
+                    lineLabel: '',
                   },
                 }));
                 window.dispatchEvent(new CustomEvent('nav:changeView', { detail: { view: 'split' } }));
