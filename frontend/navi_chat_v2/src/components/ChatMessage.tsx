@@ -15,6 +15,7 @@ interface ChatMessageProps {
   onFeedback?: (messageId: string, feedback: 'like' | 'dislike') => void;
   key?: string | number;
   mapData?: MapData | null;
+  agentMeta?: { stop_id?: string; stop_name?: string; line_number?: string; wait_time?: string };
 }
 
 function formatTime(ts: number): string {
@@ -22,9 +23,20 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ChatMessage({ messageId, role, text, matchedStops, timestamp, feedback, feedbackSent, onFeedback, mapData }: ChatMessageProps) {
+export default function ChatMessage({ messageId, role, text, matchedStops, timestamp, feedback, feedbackSent, onFeedback, mapData, agentMeta }: ChatMessageProps) {
   const busInfo = role === 'agent' ? parseBusInfo(text) : null;
   const showBusCard = busInfo && isBusRelated(text);
+
+  // Override parseBusInfo results with structured metadata from the agent when available
+  if (showBusCard && busInfo && agentMeta) {
+    if (agentMeta.stop_name) busInfo.stopName = agentMeta.stop_name;
+    if (agentMeta.line_number) busInfo.line = agentMeta.line_number;
+  }
+
+  // Si ya hay BusCard con botón flyTo, no mostrar el botón duplicado de mapData
+  const showMapButton = role === 'agent' && mapData?.stop_coordinates && !showBusCard;
+  // Si ya hay BusCard, no mostrar action-chips de paradas (evita duplicación)
+  const showStopChips = matchedStops && matchedStops.length > 0 && !showBusCard;
 
   return (
     <div className={`chat-message ${role === 'user' ? 'chat-message--user' : 'chat-message--agent'}`}>
@@ -41,25 +53,31 @@ export default function ChatMessage({ messageId, role, text, matchedStops, times
             <BusCard
               info={busInfo}
               onFlyTo={() => {
-                if (matchedStops && matchedStops.length > 0) {
-                  const coords = getStopCoords(matchedStops[0]);
-                  if (coords) {
-                    window.dispatchEvent(
-                      new CustomEvent('map:flyTo', { detail: { lng: coords[0], lat: coords[1], zoom: 16 } })
-                    );
-                    window.dispatchEvent(
-                      new CustomEvent('nav:changeView', { detail: { view: 'split' } })
-                    );
-                  }
+                // Prioridad: mapData coords > matchedStops coords
+                const coords = mapData?.stop_coordinates
+                  || (matchedStops && matchedStops.length > 0 ? getStopCoords(matchedStops[0]) : null);
+                if (coords) {
+                  window.dispatchEvent(
+                    new CustomEvent('map:showRoute', {
+                      detail: {
+                        stopCoordinates: coords,
+                        stopName: agentMeta?.stop_name || matchedStops?.[0] || busInfo.stopName || '',
+                        lineLabel: agentMeta?.line_number || busInfo.line || '',
+                      },
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent('nav:changeView', { detail: { view: 'split' } })
+                  );
                 }
               }}
             />
           </div>
         )}
 
-        {matchedStops && matchedStops.length > 0 && (
+        {showStopChips && (
           <div className="chat-message__stops">
-            {matchedStops.map((stop, i) => {
+            {matchedStops!.map((stop, i) => {
               const coords = getStopCoords(stop);
               if (!coords) return null;
 
@@ -84,7 +102,7 @@ export default function ChatMessage({ messageId, role, text, matchedStops, times
           </div>
         )}
 
-        {role === 'agent' && mapData?.stop_coordinates && (
+        {showMapButton && (
           <div style={{ marginTop: '0.5rem' }}>
             <button
               type="button"

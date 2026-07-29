@@ -6,6 +6,7 @@ import type { ChatResponse, MapData } from '@/services/agentService';
 import { extractAllStops } from '@/services/parseStops';
 import { enrichStopQuery } from '@/utils/enrichQuery';
 import { getStopCoords } from '@/utils/geoData';
+import { stopById } from '@/utils/stopsFromGold';
 import type { Lang } from '@/i18n/translations';
 import { t, speechLang } from '@/i18n/translations';
 
@@ -26,6 +27,7 @@ interface Message {
   feedbackSent?: boolean;
   questionText?: string;
   mapData?: MapData | null;
+  agentMeta?: { stop_id?: string; stop_name?: string; line_number?: string; wait_time?: string };
 }
 
 export interface FlyTarget {
@@ -123,8 +125,25 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
       const matchedStops = extractAllStops(answerText, question);
 
       let resolvedMapData = mapData;
-      if (!resolvedMapData && response.chat_message.stop_id) {
-        const stopCoords = getStopCoords(response.chat_message.stop_name || response.chat_message.stop_id);
+      if (!resolvedMapData) {
+        // Prioridad: buscar por stop_id exacto (evita colisiones de nombre)
+        // Fallback: buscar por stop_name (para quick-actions y preguntas sin ID)
+        const sid = response.chat_message.stop_id;
+        const byId = sid ? stopById[sid] : undefined;
+        // DEBUG: diagnóstico de tipos
+        console.log('[STOP_ID_DEBUG]', {
+          sid,
+          sidType: typeof sid,
+          byIdFound: !!byId,
+          byIdValue: byId ? { lat: byId.lat, lon: byId.lon, name: byId.stop_name } : null,
+          stopByIdKeysFirst5: Object.keys(stopById).slice(0, 5),
+          stopByIdKeyTypes: Object.keys(stopById).slice(0, 5).map(k => typeof k),
+          fallbackName: response.chat_message.stop_name,
+        });
+        const stopCoords = byId
+          ? [byId.lon, byId.lat] as [number, number]
+          : getStopCoords(response.chat_message.stop_name || '');
+        console.log('[STOP_ID_DEBUG] resolved coords:', stopCoords);
         if (stopCoords) {
           resolvedMapData = {
             type: 'bus_stop_and_route',
@@ -141,6 +160,12 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
         timestamp: Date.now(),
         questionText: question,
         mapData: resolvedMapData,
+        agentMeta: {
+          stop_id: response.chat_message.stop_id,
+          stop_name: response.chat_message.stop_name,
+          line_number: response.chat_message.line_number,
+          wait_time: response.chat_message.wait_time,
+        },
       };
       setMessages((prev) => [...prev, agentMsg]);
 
@@ -283,6 +308,7 @@ export default function ChatContainer({ language, onQuickAction, onFirstMessage 
                 feedbackSent={msg.feedbackSent}
                 onFeedback={handleSendFeedback}
                 mapData={msg.mapData}
+                agentMeta={msg.agentMeta}
               />
             ))}
             {isLoading && (

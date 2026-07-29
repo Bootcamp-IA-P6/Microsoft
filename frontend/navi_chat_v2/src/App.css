@@ -913,6 +913,11 @@ select:focus-visible {
   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   color: var(--color-text);
 }
+
+/* Asegurar que el popup quede por encima de los marcadores */
+.maplibregl-popup {
+  z-index: 20 !important;
+}
 .maplibregl-popup-tip {
   border-top-color: var(--color-bg-elevated) !important;
 }

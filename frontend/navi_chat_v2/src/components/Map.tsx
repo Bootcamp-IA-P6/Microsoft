@@ -46,7 +46,7 @@ function createMarkerEl(isHighlighted = false): HTMLElement {
   el.style.filter = 'none';
   el.style.transform = 'translateY(-50%)';
   el.style.cursor = 'pointer';
-  el.style.zIndex = isHighlighted ? '10' : '5';
+  el.style.zIndex = isHighlighted ? '10' : '1';
   el.style.transition = 'width 0.15s, height 0.15s, box-shadow 0.15s';
   return el;
 }
@@ -240,7 +240,8 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
       map.flyTo({ center: [lng, lat], zoom, pitch: 60, bearing: -20, essential: true, duration: 1200 });
 
       markerRef.current?.remove();
-      const marker = new maplibregl.Marker({ element: createMarkerEl(true) })
+      const el = createMarkerEl(true);
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([lng, lat])
         .addTo(map);
       markerRef.current = marker;
@@ -258,7 +259,17 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
         .addTo(map);
       popupRef.current = popup;
 
-      attachPopupToMarker(marker, coords, displayName);
+      // Click listener directo — el marcador es siempre nuevo, no necesita cleanup
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        popupRef.current?.remove();
+        if (!mapRef.current) return;
+        const p = new maplibregl.Popup({ offset: 25, closeButton: true })
+          .setLngLat(coords)
+          .setDOMContent(createStopPopupContent(displayName, coords))
+          .addTo(mapRef.current);
+        popupRef.current = p;
+      });
     };
 
     window.addEventListener('map:flyTo', handler);
@@ -301,26 +312,6 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
     }
   }
 
-  function attachPopupToMarker(marker: maplibregl.Marker, stopCoords: [number, number], stopName: string) {
-    const el = marker.getElement();
-    // Clonar el elemento para eliminar listeners previos (evita acumulación)
-    const newEl = el.cloneNode(true) as HTMLElement;
-    el.parentNode?.replaceChild(newEl, el);
-
-    newEl.addEventListener('click', (e) => {
-      e.stopPropagation();
-      popupRef.current?.remove();
-      const map = mapRef.current;
-      if (!map) return;
-
-      const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
-        .setLngLat(stopCoords)
-        .setDOMContent(createStopPopupContent(stopName, stopCoords))
-        .addTo(map);
-      popupRef.current = popup;
-    });
-  }
-
   useEffect(() => {
     const handler = (e: Event) => {
       const map = mapRef.current;
@@ -330,7 +321,8 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
       if (!stopCoords) return;
 
       markerRef.current?.remove();
-      const marker = new maplibregl.Marker({ element: createMarkerEl(true) })
+      const el = createMarkerEl(true);
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat(stopCoords)
         .addTo(map);
       markerRef.current = marker;
@@ -342,7 +334,17 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
         .addTo(map);
       popupRef.current = popup;
 
-      attachPopupToMarker(marker, stopCoords, stopName || 'Parada');
+      // Click listener directo — el marcador es siempre nuevo, no necesita cleanup
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        popupRef.current?.remove();
+        if (!mapRef.current) return;
+        const p = new maplibregl.Popup({ offset: 25, closeButton: true })
+          .setLngLat(stopCoords)
+          .setDOMContent(createStopPopupContent(stopName || 'Parada', stopCoords))
+          .addTo(mapRef.current);
+        popupRef.current = p;
+      });
 
       // Dibujar la ruta de la línea si tenemos el shape
       drawRouteLine(map, lineLabel);
@@ -391,8 +393,8 @@ export default function Map({ className = '', flyTarget, isMapVisible }: MapProp
       },
       paint: {
         'line-color': color.bg,
-        'line-width': 4,
-        'line-opacity': 0.8,
+        'line-width': 6,
+        'line-opacity': 0.9,
       },
     });
   }

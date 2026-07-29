@@ -33,9 +33,10 @@ export default function BusCard({ info, onFlyTo }: BusCardProps) {
           className="status-badge"
           style={{ background: lineColor.bg, color: lineColor.fg, fontWeight: 700 }}
         >
-          {info.line || '5'}
+          {info.line}
         </span>
-        <p className="bus-row-card__stop">{info.stopName || 'Parada 5907 (Sevilla)'}</p>
+        {info.stopName && <p className="bus-row-card__stop">{info.stopName}</p>}
+        {info.destination && <p className="bus-row-card__direction">→ {info.destination}</p>}
 
         {hasIncidentFlag && (
           <span
@@ -49,7 +50,7 @@ export default function BusCard({ info, onFlyTo }: BusCardProps) {
       </div>
 
       <p className="bus-row-card__eta">
-        <strong>{info.firstBusMinutes != null ? info.firstBusMinutes : '5'} min</strong>
+        <strong>{info.firstBusMinutes} min</strong>
         {info.secondBusMinutes != null && (
           <span className="bus-row-card__eta-secondary"> · Siguiente: {info.secondBusMinutes} min</span>
         )}
@@ -57,7 +58,7 @@ export default function BusCard({ info, onFlyTo }: BusCardProps) {
 
       {onFlyTo && (
         <button type="button" onClick={onFlyTo} className="action-chip" style={{ marginTop: '0.5rem' }}>
-          Ver ubicación en mapa 3D →
+          Ver en mapa 3D →
         </button>
       )}
     </div>
