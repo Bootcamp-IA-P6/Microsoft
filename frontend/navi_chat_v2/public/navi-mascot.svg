@@ -1,0 +1,19 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Navi - mascota, solo cara</title>
+<desc>Cabeza redonda tipo robot amigable en azul marino con placa facial blanca, ojos ovalados y sonrisa, con una antena rematada en una bolita que contiene el simbolo de brujula de la marca.</desc>
+<circle cx="60" cy="68" r="46" fill="#14213D"/>
+<circle cx="60" cy="68" r="46" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+<line x1="60" y1="22" x2="60" y2="10" stroke="#14213D" stroke-width="4"/>
+<circle cx="60" cy="9" r="10" fill="#14213D"/>
+<circle cx="60" cy="9" r="10" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+<path d="M60 3 L65 9 L60 9 L55 9 Z" fill="#FFB100"/>
+<path d="M60 9 L65 9 L60 15 L55 9 Z" fill="#FFFFFF"/>
+<ellipse cx="60" cy="70" rx="32" ry="28" fill="#FFFFFF"/>
+<ellipse cx="47" cy="66" rx="6.5" ry="8.5" fill="#14213D"/>
+<ellipse cx="73" cy="66" rx="6.5" ry="8.5" fill="#14213D"/>
+<ellipse cx="49.2" cy="63.2" rx="2" ry="2.4" fill="#FFFFFF"/>
+<ellipse cx="75.2" cy="63.2" rx="2" ry="2.4" fill="#FFFFFF"/>
+<path d="M46 84 Q60 96 74 84" fill="none" stroke="#14213D" stroke-width="4" stroke-linecap="round"/>
+<circle cx="29" cy="72" r="4.5" fill="#FFB100"/>
+<circle cx="91" cy="72" r="4.5" fill="#FFB100"/>
+</svg>
